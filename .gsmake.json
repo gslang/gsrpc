@@ -1,0 +1,26 @@
+{
+    "name":"github.com/gsrpc/gsrpc",
+
+    "domain":"task|gslang|golang",
+
+    "import" : [
+        {"name" : "github.com/gsdocker/gsos","domain":"task|golang","version":"v2.0"},
+        {"name" : "github.com/gsdocker/gserrors","domain":"task|golang","version":"v2.0"},
+        {"name" : "github.com/gsdocker/gsconfig","domain":"task|golang","version":"v2.0"},
+        {"name" : "github.com/gsdocker/gslogger","domain":"task|golang","version":"v2.0"},
+		{"name" : "github.com/gsdocker/gslang","version":"release/v3.0"}
+    ],
+
+    "task":{
+        "gsrpcgo":{
+            "domain":"all",
+            "description" : "generate gsrpc go stub codes"
+        }
+    },
+
+    "properties":{
+        "gsrpc":{
+            "test":["./test/test.gs"]
+        }
+    }
+}
