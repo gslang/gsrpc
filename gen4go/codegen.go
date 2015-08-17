@@ -13,6 +13,7 @@ import (
 	"github.com/gsdocker/gserrors"
 	"github.com/gsdocker/gslang"
 	"github.com/gsdocker/gslang/ast"
+	"github.com/gsdocker/gslang/lexer"
 	"github.com/gsdocker/gslogger"
 	"github.com/gsdocker/gsos/fs"
 )
@@ -27,10 +28,14 @@ type _CodeGen struct {
 	codebuilder  gslang.CodeBuilder // code builder
 }
 
+var builtin = map[lexer.TokenType]string{
+	lexer.KeyByte: "byte",
+}
+
 // NewCodeGen .
 func NewCodeGen(rootpath string) (gslang.CodeGen, error) {
 
-	codebuilder, err := gslang.NewCodeBuilder(tpl)
+	codebuilder, err := gslang.NewCodeBuilder(tpl, builtin)
 
 	if err != nil {
 		return nil, err
@@ -85,7 +90,7 @@ func (codegen *_CodeGen) Contract(contract *ast.Contract) {
 func (codegen *_CodeGen) EndScript() {
 	codegen.header.WriteString(codegen.content.String())
 
-	_, err := format.Source(codegen.header.Bytes())
+	content, err := format.Source(codegen.header.Bytes())
 
 	if err != nil {
 		gserrors.Panicf(err, "format golang source codes error")
@@ -103,7 +108,7 @@ func (codegen *_CodeGen) EndScript() {
 		}
 	}
 
-	err = ioutil.WriteFile(fullpath, codegen.header.Bytes(), 0644)
+	err = ioutil.WriteFile(fullpath, content, 0644)
 
 	if err != nil {
 		gserrors.Panicf(err, "write generate golang file error")

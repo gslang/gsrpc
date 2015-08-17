@@ -5,7 +5,7 @@ var tpl = `
 {{define "enum"}} {{$Enum := .Name}}
 
 //{{$Enum}} type define -- generate by gsc
-type {{$Enum}} uint32
+type {{$Enum}} {{enumType .}}
 
 //enum {{$Enum}} constants -- generate by gsc
 const (
