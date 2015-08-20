@@ -16,20 +16,28 @@ func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]strin
 	var path string
 
 	if strings.HasPrefix(orignal, "./") {
-		path = filepath.Join(runner.StartDir(), orignal)
+		path, _ = filepath.Abs(filepath.Join(runner.StartDir(), orignal))
 	} else {
-		path = filepath.Join(rootDir, "src", orignal)
+		path, _ = filepath.Abs(filepath.Join(rootDir, "src", orignal))
 
 		if !fs.Exists(path) {
 			return nil, gserrors.Newf(ErrUnknownPath, "unknown gslang path :%s", path)
 		}
 	}
 
-	if fs.IsDir(path) {
+	fi, err := os.Stat(path)
+
+	if err == nil && fi.IsDir() {
 
 		var files []string
 
-		filepath.Walk(path, func(newpath string, info os.FileInfo, err error) error {
+		path, err = os.Readlink(path)
+
+		if err != nil {
+			return nil, err
+		}
+
+		err = filepath.Walk(path, func(newpath string, info os.FileInfo, err error) error {
 
 			if info.IsDir() && path != newpath {
 				return filepath.SkipDir
@@ -39,16 +47,16 @@ func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]strin
 				files = append(files, newpath)
 			}
 
-			return nil
+			return err
 		})
 
-		return files, nil
+		return files, err
 	}
 
-	return []string{path}, nil
+	return []string{path}, err
 }
 
-func compileModule(runner *gsmake.Runner, name string, files []string, codeGen gslang.CodeGen) error {
+func compileModule(runner *gsmake.Runner, name string, files []string, codeGen gslang.CodeTarget) error {
 
 	rootDir := runner.RootFS().DomainDir("gslang")
 

@@ -9,8 +9,8 @@ import (
 	"github.com/gsrpc/gsrpc/gen4go"
 )
 
-// TaskGsrpcgo .
-func TaskGsrpcgo(runner *gsmake.Runner, args ...string) error {
+// TaskGorpc .
+func TaskGorpc(runner *gsmake.Runner, args ...string) error {
 
 	var modules map[string][]string
 
@@ -22,7 +22,7 @@ func TaskGsrpcgo(runner *gsmake.Runner, args ...string) error {
 
 	rootDir := filepath.Join(runner.RootFS().DomainDir("golang"), "src")
 
-	codegen, err := gen4go.NewCodeGen(rootDir)
+	codegen, err := gen4go.NewCodeTarget(rootDir)
 
 	if err != nil {
 		return err
