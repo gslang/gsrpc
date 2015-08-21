@@ -22,7 +22,7 @@ func TaskGorpc(runner *gsmake.Runner, args ...string) error {
 
 	rootDir := filepath.Join(runner.RootFS().DomainDir("golang"), "src")
 
-	codegen, err := gen4go.NewCodeTarget(rootDir)
+	codegen, err := gen4go.NewCodeGen(rootDir)
 
 	if err != nil {
 		return err

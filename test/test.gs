@@ -51,8 +51,8 @@ table KV {
 
 
 
-// HttpREST API
-contract HttpREST {
+// HTTPREST API
+contract HTTPREST {
     @Async
     // invoke http post method
     @Timeout(Duration(-100,TimeUnit.Second))

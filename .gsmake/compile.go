@@ -56,7 +56,7 @@ func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]strin
 	return []string{path}, err
 }
 
-func compileModule(runner *gsmake.Runner, name string, files []string, codeGen gslang.CodeTarget) error {
+func compileModule(runner *gsmake.Runner, name string, files []string, codeGen gslang.Visitor) error {
 
 	rootDir := runner.RootFS().DomainDir("gslang")
 
@@ -89,5 +89,5 @@ func compileModule(runner *gsmake.Runner, name string, files []string, codeGen g
 		return err
 	}
 
-	return compiler.Gen(codeGen)
+	return compiler.Visit(codeGen)
 }
