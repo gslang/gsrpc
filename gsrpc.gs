@@ -2,7 +2,7 @@ package com.gsrpc;
 
 // RPC message codes
 enum Code {
-    Heartbeat,WhoAmI,Call,Return,Exception
+    Heartbeat,WhoAmI,Request,Response
 }
 
 // RPC message
@@ -25,6 +25,6 @@ table Request {
 table Response {
     uint16      ID;
     uint16      Service;
-    uint16      Exception; // exception id
+    sbyte       Exception; // exception id
     byte[]      Content;
 }

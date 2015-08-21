@@ -252,8 +252,6 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsr
     return
 }
 
-{{end}}
-
 
 //_{{$Contract}}Binder the remote service proxy binder
 type _{{$Contract}}Binder struct {
@@ -266,18 +264,21 @@ func Bind{{$Contract}}(id uint16,channel gsrpc.Channel) {{$Contract}} {
 }
 
 {{range .Methods}}
-{{$Name := symbol .Name}}
+{{$Name := title .Name}}
 //{{$Name}} -- generate by gsc
-func (binder *{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParams .Return}}{
+func (binder *{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnArgs .Return}}{
     defer func(){
        if e := recover(); e != nil {
            err = gserrors.New(e.(error))
        }
     }()
+
     call := &gsrpc.Call{
        Service:uint16(binder.id),
        Method:{{.ID}},
     }
+
+
     {{range .Params}}
     var param{{.ID}} bytes.Buffer
     err = {{writeType .Type}}(&param{{.ID}},arg{{.ID}})
@@ -286,30 +287,40 @@ func (binder *{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParams .Ret
     }
     call.Params = append(call.Params,&gsrpc.Param{Content:param{{.ID}}.Bytes()})
     {{end}}
+
+
     var future gsrpc.Future
     future, err = binder.channel.Send(call)
     if err != nil {
         return
     }
+
+
     {{if .Return}}
     var callReturn *gsrpc.Return
     callReturn, err = future.Wait()
     if err != nil {
         return
     }
-    {{range .Return}}
-    ret{{.ID}},err = {{readType .Type}}(bytes.NewBuffer(callReturn.Params[{{.ID}}].Content))
+
+    retval,err = {{readType .Return}}(bytes.NewBuffer(callReturn.Content))
+
     if err != nil {
-        err = gserrors.Newf(err,"read {{$Contract}}#{{$Name}} return{{.ID}}")
+        err = gserrors.Newf(err,"read {{$Contract}}#{{$Name}} return")
         return
     }
-    {{end}}
+
     {{else}}
     _, err = future.Wait()
     {{end}}
     return
 }
 {{end}}
+
+{{end}}
+
+
+
 
 
 {{define "create_array"}}func() {{typeName .}} {
