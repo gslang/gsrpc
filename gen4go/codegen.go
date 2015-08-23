@@ -9,6 +9,8 @@ import (
 	"strings"
 	"text/template"
 
+	"go/format"
+
 	"github.com/gsdocker/gserrors"
 	"github.com/gsdocker/gslang"
 	"github.com/gsdocker/gslang/ast"
@@ -78,9 +80,11 @@ var defaultval = map[lexer.TokenType]string{
 }
 
 var imports = map[string]string{
-	"gorpc.": "github.com/gsrpc/gorpc",
-	"fmt.":   "fmt",
-	"gsrpc.": "com/gsrpc",
+	"gorpc.":    "github.com/gsrpc/gorpc",
+	"fmt.":      "fmt",
+	"bytes.":    "bytes",
+	"gsrpc.":    "com/gsrpc",
+	"gserrors.": "github.com/gsdocker/gserrors",
 }
 
 type _CodeGen struct {
@@ -216,7 +220,13 @@ func (codegen *_CodeGen) typeRef(pacakgeName, fullname string) (prefix string, n
 		return "", strings.Title(nodes[len(nodes)-1])
 	}
 
-	return nodes[len(nodes)-2], strings.Title(nodes[len(nodes)-1])
+	prefix = nodes[len(nodes)-2]
+
+	if strings.Join(nodes[:len(nodes)-1], ".") == "com.gsrpc" {
+		prefix = "gorpc"
+	}
+
+	return prefix, strings.Title(nodes[len(nodes)-1])
 }
 
 func (codegen *_CodeGen) writeType(typeDecl ast.Type) string {
@@ -480,9 +490,12 @@ func (codegen *_CodeGen) BeginScript(script *ast.Script) {
 
 	codegen.script = script
 
-	nodes := strings.Split(script.Package, ".")
-
-	codegen.header.WriteString(fmt.Sprintf("package %s\n\n", nodes[len(nodes)-1]))
+	if script.Package == "com.gsrpc" {
+		codegen.header.WriteString("package gorpc\n\n")
+	} else {
+		nodes := strings.Split(script.Package, ".")
+		codegen.header.WriteString(fmt.Sprintf("package %s\n\n", nodes[len(nodes)-1]))
+	}
 
 	codegen.imports = make(map[string]string)
 
@@ -527,6 +540,18 @@ func (codegen *_CodeGen) EndScript() {
 
 	content := codegen.content.String()
 
+	packageName := codegen.script.Package
+
+	if packageName == "com.gsrpc" {
+
+		packageName = "github.com/gsrpc/gorpc"
+
+		content = strings.Replace(content, "gorpc.", "", -1)
+
+	} else {
+		packageName = strings.Replace(packageName, ".", "/", -1)
+	}
+
 	for k, v := range imports {
 		if strings.Contains(content, k) {
 			codegen.header.WriteString(fmt.Sprintf("import \"%s\"\n", v))
@@ -535,15 +560,18 @@ func (codegen *_CodeGen) EndScript() {
 
 	codegen.header.WriteString(content)
 
-	//content, err := format.Source(codegen.header.Bytes())
+	var err error
+	var sources []byte
 
-	// if err != nil {
-	// 	gserrors.Panicf(err, "format golang source codes error")
-	// }
+	sources, err = format.Source(codegen.header.Bytes())
 
-	fullpath := filepath.Join(codegen.rootpath, strings.Replace(codegen.script.Package, ".", "/", -1), filepath.Base(codegen.script.Name())+".go")
+	if err != nil {
+		gserrors.Panicf(err, "format golang source codes error")
+	}
 
-	codegen.I("generate golang file :%s", fullpath)
+	fullpath := filepath.Join(codegen.rootpath, packageName, filepath.Base(codegen.script.Name())+".go")
+
+	codegen.D("generate golang file :%s", fullpath)
 
 	if !fs.Exists(filepath.Dir(fullpath)) {
 		err := os.MkdirAll(filepath.Dir(fullpath), 0755)
@@ -553,7 +581,7 @@ func (codegen *_CodeGen) EndScript() {
 		}
 	}
 
-	err := ioutil.WriteFile(fullpath, codegen.header.Bytes(), 0644)
+	err = ioutil.WriteFile(fullpath, sources, 0644)
 
 	if err != nil {
 		gserrors.Panicf(err, "write generate golang file error")

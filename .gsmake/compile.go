@@ -31,10 +31,12 @@ func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]strin
 
 		var files []string
 
-		path, err = os.Readlink(path)
+		if fi.Mode()&os.ModeSymlink != 0 {
+			path, err = os.Readlink(path)
 
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		err = filepath.Walk(path, func(newpath string, info os.FileInfo, err error) error {

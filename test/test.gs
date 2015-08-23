@@ -51,15 +51,14 @@ table KV {
 
 
 
-// HTTPREST API
-contract HTTPREST {
+// RESTful API
+contract RESTful {
     @Async
     // invoke http post method
     @Timeout(Duration(-100,TimeUnit.Second))
-    void Post(@Out byte[] content) throws (RemoteException,CodeException);
+    void Post(string name,byte[] content) throws (RemoteException,NotFound);
     // get invoke http get method
-    byte[] Get(KV[] properties) throws (RemoteException);
-    void PostMessage(Message message);
+    byte[] Get(string name) throws (NotFound);
 }
 
 table Block {
@@ -70,5 +69,5 @@ table Block {
 // remote exception
 @Flag
 @Exception
-table CodeException {
+table NotFound {
 }

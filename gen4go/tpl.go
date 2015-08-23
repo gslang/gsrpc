@@ -153,8 +153,13 @@ func Make{{$Contract}}(id uint16,impl {{$Contract}}) (gorpc.Dispatcher){
         impl:    impl,
     }
 }
-// Dispatch implement gsrpc.Dispatcher
-func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsrpc.Response, err error) {
+// ID implement gorpc.Dispatcher
+func (maker *_{{$Contract}}Maker) ID() uint16 {
+    return maker.id
+}
+
+// Dispatch implement gorpc.Dispatcher
+func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gorpc.Response, err error) {
 
     defer func(){
         if e := recover(); e != nil {
@@ -192,6 +197,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsr
 
             var buff bytes.Buffer
 
+            id := int8(-1)
+
             switch err.(type) {
             {{range .Exceptions}}
             case {{typeName .Type}}:
@@ -202,14 +209,17 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsr
                     return
                 }
 
+                id = {{.ID}}
+
             {{end}}
             default:
                 return
             }
 
-            callReturn = &gsrpc.Response{
+            callReturn = &gorpc.Response{
                 ID : call.ID,
                 Service:call.Service,
+                Exception:id,
             }
 
             callReturn.Content = buff.Bytes()
@@ -229,17 +239,19 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsr
             return
         }
 
-        callReturn = &gsrpc.Response{
+        callReturn = &gorpc.Response{
             ID : call.ID,
             Service:call.Service,
+            Exception:int8(-1),
         }
 
         callReturn.Content = buff.Bytes()
 
         {{else}}
-        callReturn = &gsrpc.Response{
+        callReturn = &gorpc.Response{
             ID : call.ID,
             Service:call.Service,
+            Exception:int8(-1),
         }
         {{end}}
 
@@ -256,24 +268,24 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gsrpc.Request) (callReturn *gsr
 //_{{$Contract}}Binder the remote service proxy binder
 type _{{$Contract}}Binder struct {
     id            uint16          // service id
-    channel       gsrpc.Channel   // contract bind channel
+    channel       gorpc.Channel   // contract bind channel
 }
 // Bind{{$Contract}} bind remote service and return remote service's proxy object
-func Bind{{$Contract}}(id uint16,channel gsrpc.Channel) {{$Contract}} {
+func Bind{{$Contract}}(id uint16,channel gorpc.Channel) {{$Contract}} {
     return &_{{$Contract}}Binder{id:id,channel:channel }
 }
 
 {{range .Methods}}
 {{$Name := title .Name}}
 //{{$Name}} -- generate by gsc
-func (binder *{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnArgs .Return}}{
+func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Return}}{
     defer func(){
        if e := recover(); e != nil {
            err = gserrors.New(e.(error))
        }
     }()
 
-    call := &gsrpc.Call{
+    call := &gorpc.Request{
        Service:uint16(binder.id),
        Method:{{.ID}},
     }
@@ -281,37 +293,56 @@ func (binder *{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnArgs .Retur
 
     {{range .Params}}
     var param{{.ID}} bytes.Buffer
-    err = {{writeType .Type}}(&param{{.ID}},arg{{.ID}})
+    err = {{writeType .Type}}(&param{{.ID}},{{.Name}})
     if err != nil {
         return
     }
-    call.Params = append(call.Params,&gsrpc.Param{Content:param{{.ID}}.Bytes()})
+    call.Params = append(call.Params,&gorpc.Param{Content:param{{.ID}}.Bytes()})
     {{end}}
 
 
-    var future gsrpc.Future
+    var future gorpc.Future
     future, err = binder.channel.Send(call)
     if err != nil {
         return
     }
 
-
-    {{if .Return}}
-    var callReturn *gsrpc.Return
+    var callReturn *gorpc.Response
     callReturn, err = future.Wait()
     if err != nil {
         return
     }
 
+    if callReturn.Exception != -1 {
+        switch callReturn.Exception {
+        {{range .Exceptions}}
+        case {{.ID}}:
+            var exception error
+            exception,err = {{readType .Type}}(bytes.NewBuffer(callReturn.Content))
+
+            if err != nil {
+                err = gserrors.Newf(err,"read {{$Contract}}#{{$Name}} return")
+            } else {
+                err = exception
+            }
+
+            return
+        {{end}}
+        default:
+            err = gserrors.Newf(gorpc.ErrRPC,"catch unknown exception(%d) for {{$Contract}}#{{$Name}}",callReturn.Exception)
+            return
+        }
+    }
+
+
+
+    {{if notVoid .Return}}
     retval,err = {{readType .Return}}(bytes.NewBuffer(callReturn.Content))
 
     if err != nil {
         err = gserrors.Newf(err,"read {{$Contract}}#{{$Name}} return")
         return
     }
-
-    {{else}}
-    _, err = future.Wait()
     {{end}}
     return
 }

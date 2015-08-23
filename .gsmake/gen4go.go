@@ -9,6 +9,11 @@ import (
 	"github.com/gsrpc/gsrpc/gen4go"
 )
 
+// TaskResource .
+func TaskResource(runner *gsmake.Runner, args ...string) error {
+	return nil
+}
+
 // TaskGorpc .
 func TaskGorpc(runner *gsmake.Runner, args ...string) error {
 

@@ -2,7 +2,11 @@ package com.gsrpc;
 
 // RPC message codes
 enum Code {
-    Heartbeat,WhoAmI,Request,Response
+    Heartbeat,WhoAmI,Request,Response,Accept,Reject
+}
+
+enum State{
+    Disconnect,Connecting,Connected,Disconnecting,Closed
 }
 
 // RPC message
@@ -27,4 +31,26 @@ table Response {
     uint16      Service;
     sbyte       Exception; // exception id
     byte[]      Content;
+}
+
+enum OSType {
+    Windows(0),Linux(1),OSX(2),WP(3),Android(4),iOS(5)
+}
+
+enum ArchType {
+    X86(0),X64(1),ARM(2)
+}
+
+// The client device type
+table Device {
+    string      ID;             // device udid
+    string      Type;           // device type
+    ArchType    Arch;           // device arch type
+    OSType      OS;             // device os type
+    string      OSVersion;      // device os reversion
+}
+
+table WhoAmI {
+    Device      ID;             // device name
+    byte[]      Context;         // context data
 }

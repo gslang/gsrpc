@@ -12,9 +12,16 @@
     ],
 
     "task":{
+
         "gorpc":{
             "domain":"all",
             "description" : "generate gsrpc go stub codes"
+        },
+
+        "resource":{
+            "prev":"gorpc",
+            "domain":"all|golang",
+            "description" : "compile gslang source codes"
         }
     }
 }
