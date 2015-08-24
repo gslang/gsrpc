@@ -31,21 +31,19 @@ func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]strin
 
 		var files []string
 
-		if fi.Mode()&os.ModeSymlink != 0 {
-			path, err = os.Readlink(path)
-
-			if err != nil {
-				return nil, err
-			}
+		if path, err = filepath.EvalSymlinks(path); err != nil {
+			return files, gserrors.Newf(err, "try search *.gs files error")
 		}
 
 		err = filepath.Walk(path, func(newpath string, info os.FileInfo, err error) error {
 
 			if info.IsDir() && path != newpath {
+
 				return filepath.SkipDir
 			}
 
 			if filepath.Ext(info.Name()) == ".gs" {
+
 				files = append(files, newpath)
 			}
 
