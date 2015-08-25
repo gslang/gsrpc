@@ -12,6 +12,7 @@ enum State{
 // RPC message
 table Message {
     Code    Code;       // message code
+    byte    Agent;      // message agent id
     byte[]  Content;    // message content
 }
 
