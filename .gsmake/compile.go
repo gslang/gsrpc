@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gsdocker/gserrors"
-	"github.com/gsdocker/gslang"
+	"github.com/gsrpc/gslang"
 	"github.com/gsdocker/gsos/fs"
 	"github.com/gsmake/gsmake"
 )
@@ -66,7 +66,7 @@ func compileModule(runner *gsmake.Runner, name string, files []string, codeGen g
 		gserrors.Panicf(err.Orignal, "parse %s error\n\t%s", err.Start, err.Text)
 	}))
 
-	files = append(files, "github.com/gsdocker/gslang", "github.com/gsrpc/gsrpc")
+	files = append(files, "github.com/gsrpc/gslang", "github.com/gsrpc/gsrpc")
 
 	for _, file := range files {
 		paths, err := getFilePath(runner, rootDir, file)

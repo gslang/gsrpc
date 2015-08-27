@@ -12,11 +12,11 @@ import (
 	"go/format"
 
 	"github.com/gsdocker/gserrors"
-	"github.com/gsdocker/gslang"
-	"github.com/gsdocker/gslang/ast"
-	"github.com/gsdocker/gslang/lexer"
 	"github.com/gsdocker/gslogger"
 	"github.com/gsdocker/gsos/fs"
+	"github.com/gsrpc/gslang"
+	"github.com/gsrpc/gslang/ast"
+	"github.com/gsrpc/gslang/lexer"
 )
 
 var builtin = map[lexer.TokenType]string{
@@ -95,6 +95,7 @@ type _CodeGen struct {
 	content      bytes.Buffer       // content writer
 	tpl          *template.Template // code generate template
 	imports      map[string]string  // imports
+	packageName  string             // package name
 }
 
 // NewCodeGen .
@@ -483,19 +484,33 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 	return "unknown"
 }
 
-func (codegen *_CodeGen) BeginScript(script *ast.Script) {
+func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) {
 
 	codegen.header.Reset()
 	codegen.content.Reset()
 
 	codegen.script = script
 
-	if script.Package == "com.gsrpc" {
-		codegen.header.WriteString("package gorpc\n\n")
-	} else {
-		nodes := strings.Split(script.Package, ".")
-		codegen.header.WriteString(fmt.Sprintf("package %s\n\n", nodes[len(nodes)-1]))
+	codegen.packageName = script.Package
+
+	lang, ok := gslang.FindAnnotation(script, "gslang.Lang")
+
+	if ok {
+
+		langName, ok := lang.Args.NamedArg("Name")
+
+		if ok {
+			if compiler.Eval().EvalString(langName) == "golang" {
+				packageName, ok := lang.Args.NamedArg("Package")
+				if ok {
+					codegen.packageName = compiler.Eval().EvalString(packageName)
+				}
+			}
+		}
 	}
+
+	path := strings.Replace(codegen.packageName, ".", "/", -1)
+	codegen.header.WriteString(fmt.Sprintf("package %s\n\n", filepath.Base(path)))
 
 	codegen.imports = make(map[string]string)
 
@@ -504,53 +519,49 @@ func (codegen *_CodeGen) BeginScript(script *ast.Script) {
 	}
 }
 
-func (codegen *_CodeGen) Using(using *ast.Using) {
+func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {
 
 	nodes := strings.Split(using.Name(), ".")
 
 	codegen.imports[nodes[len(nodes)-2]+"."] = strings.Join(nodes[:len(nodes)-1], ".")
 }
 
-func (codegen *_CodeGen) Table(tableType *ast.Table) {
+func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) {
 
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "table", tableType); err != nil {
 		gserrors.Panicf(err, "exec template(table) for %s errir", tableType)
 	}
 }
-func (codegen *_CodeGen) Exception(tableType *ast.Table) {
+func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Table) {
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "exception", tableType); err != nil {
 		gserrors.Panicf(err, "exec template(exception) for %s errir", tableType)
 	}
 }
-func (codegen *_CodeGen) Annotation(annotation *ast.Table) {
+func (codegen *_CodeGen) Annotation(compiler *gslang.Compiler, annotation *ast.Table) {
 }
-func (codegen *_CodeGen) Enum(enum *ast.Enum) {
+func (codegen *_CodeGen) Enum(compiler *gslang.Compiler, enum *ast.Enum) {
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "enum", enum); err != nil {
 		gserrors.Panicf(err, "exec template(enum) for %s errir", enum)
 	}
 }
-func (codegen *_CodeGen) Contract(contract *ast.Contract) {
+func (codegen *_CodeGen) Contract(compiler *gslang.Compiler, contract *ast.Contract) {
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "contract", contract); err != nil {
 		gserrors.Panicf(err, "exec template(contract) for %s errir", contract)
 	}
 }
 
 // EndScript .
-func (codegen *_CodeGen) EndScript() {
+func (codegen *_CodeGen) EndScript(compiler *gslang.Compiler) {
 
 	content := codegen.content.String()
 
 	packageName := codegen.script.Package
 
 	if packageName == "com.gsrpc" {
-
-		packageName = "github.com/gsrpc/gorpc"
-
 		content = strings.Replace(content, "gorpc.", "", -1)
-
-	} else {
-		packageName = strings.Replace(packageName, ".", "/", -1)
 	}
+
+	packageName = strings.Replace(codegen.packageName, ".", "/", -1)
 
 	for k, v := range imports {
 		if strings.Contains(content, k) {
@@ -563,13 +574,13 @@ func (codegen *_CodeGen) EndScript() {
 	var err error
 	var sources []byte
 
+	fullpath := filepath.Join(codegen.rootpath, packageName, filepath.Base(codegen.script.Name())+".go")
+
 	sources, err = format.Source(codegen.header.Bytes())
 
 	if err != nil {
-		gserrors.Panicf(err, "format golang source codes error")
+		gserrors.Panicf(err, "format golang source codes error:%s", fullpath)
 	}
-
-	fullpath := filepath.Join(codegen.rootpath, packageName, filepath.Base(codegen.script.Name())+".go")
 
 	codegen.D("generate golang file :%s", fullpath)
 

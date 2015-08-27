@@ -1,8 +1,12 @@
 package com.gsrpc;
 
+using gslang.Lang;
+
+@Lang(Name:"golang",Package:"github.com/gsrpc/gorpc")
+
 // RPC message codes
 enum Code {
-    Heartbeat,WhoAmI,Request,Response,Accept,Reject
+    Heartbeat,WhoAmI,Request,Response,Accept,Reject,Tunnel
 }
 
 enum State{
