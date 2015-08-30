@@ -38,6 +38,11 @@ table Response {
     byte[]      Content;
 }
 
+table Tunnel {
+    Device      ID;
+    Message     Message;
+}
+
 enum OSType {
     Windows(0),Linux(1),OSX(2),WP(3),Android(4),iOS(5)
 }

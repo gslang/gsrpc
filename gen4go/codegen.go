@@ -96,6 +96,7 @@ type _CodeGen struct {
 	tpl          *template.Template // code generate template
 	imports      map[string]string  // imports
 	packageName  string             // package name
+	scriptPath   string             // script path
 }
 
 // NewCodeGen .
@@ -492,6 +493,7 @@ func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Scri
 	codegen.script = script
 
 	codegen.packageName = script.Package
+	codegen.scriptPath = strings.Replace(codegen.packageName, ".", "/", -1)
 
 	lang, ok := gslang.FindAnnotation(script, "gslang.Lang")
 
@@ -504,6 +506,7 @@ func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Scri
 				packageName, ok := lang.Args.NamedArg("Package")
 				if ok {
 					codegen.packageName = compiler.Eval().EvalString(packageName)
+					codegen.scriptPath = codegen.packageName
 				}
 			}
 		}
@@ -561,8 +564,6 @@ func (codegen *_CodeGen) EndScript(compiler *gslang.Compiler) {
 		content = strings.Replace(content, "gorpc.", "", -1)
 	}
 
-	packageName = strings.Replace(codegen.packageName, ".", "/", -1)
-
 	for k, v := range imports {
 		if strings.Contains(content, k) {
 			codegen.header.WriteString(fmt.Sprintf("import \"%s\"\n", v))
@@ -574,7 +575,7 @@ func (codegen *_CodeGen) EndScript(compiler *gslang.Compiler) {
 	var err error
 	var sources []byte
 
-	fullpath := filepath.Join(codegen.rootpath, packageName, filepath.Base(codegen.script.Name())+".go")
+	fullpath := filepath.Join(codegen.rootpath, codegen.scriptPath, filepath.Base(codegen.script.Name())+".go")
 
 	sources, err = format.Source(codegen.header.Bytes())
 
