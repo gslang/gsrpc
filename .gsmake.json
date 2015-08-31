@@ -14,13 +14,24 @@
     "task":{
 
         "gorpc":{
-            "domain":"all",
+            "domain":"golang",
             "description" : "generate gsrpc go stub codes"
+        },
+
+        "jvmrpc":{
+            "domain":"jvm",
+            "description" : "generate gsrpc jvm stub codes"
         },
 
         "resource":{
             "prev":"gorpc",
-            "domain":"all|golang",
+            "domain":"all",
+            "description" : "compile gslang source codes"
+        },
+
+        "resource":{
+            "prev":"jvmrpc",
+            "domain":"all",
             "description" : "compile gslang source codes"
         }
     }

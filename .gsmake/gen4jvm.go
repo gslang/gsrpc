@@ -6,16 +6,11 @@ import (
 	"github.com/gsdocker/gserrors"
 	"github.com/gsmake/gsmake"
 	"github.com/gsmake/gsmake/property"
-	"github.com/gsrpc/gsrpc/gen4go"
+	"github.com/gsrpc/gsrpc/gen4java"
 )
 
-// TaskResource .
-func TaskResource(runner *gsmake.Runner, args ...string) error {
-	return nil
-}
-
-// TaskGorpc .
-func TaskGorpc(runner *gsmake.Runner, args ...string) error {
+// TaskJvmrpc .
+func TaskJvmrpc(runner *gsmake.Runner, args ...string) error {
 
 	var modules map[string][]string
 
@@ -30,9 +25,15 @@ func TaskGorpc(runner *gsmake.Runner, args ...string) error {
 		return err
 	}
 
-	rootDir := filepath.Join(runner.RootFS().DomainDir("golang"), "src")
+	var rootDir string
 
-	codegen, err := gen4go.NewCodeGen(rootDir)
+	if len(args) == 0 {
+		rootDir = filepath.Join(runner.StartDir(), "src/main/java")
+	} else {
+		rootDir = args[0]
+	}
+
+	codegen, err := gen4java.NewCodeGen(rootDir)
 
 	if err != nil {
 		return err
