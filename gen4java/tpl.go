@@ -15,7 +15,7 @@ public enum {{title .Name}} {
     public String toString() {
         switch(this.value)
         {
-        {{range .Values}}
+        {{range .Constants}}
         case {{.Value}}:
             return "{{title .Name}}";
         {{end}}
@@ -27,14 +27,14 @@ public enum {{title .Name}} {
     }
     public void Marshal(Writer writer) throws Exception
     {
-        return {{if enumSize . | eq 4}} writer.WriteUint32(writer,val.getValue()); {{else}} writer.WriteByte(writer,val.getValue()); {{end}}
+        {{if enumSize . | eq 4}} writer.WriteUInt32(getValue()); {{else}} writer.WriteByte(getValue()); {{end}}
     }
     public static {{title .Name}} Unmarshal(Reader reader) throws Exception
     {
-        {{enumType .}} code =  {{if enumSize . | eq 4}} reader.ReadUint32(reader) {{else}} reader.ReadByte(reader) {{end}}
+        {{enumType .}} code =  {{if enumSize . | eq 4}} reader.ReadUInt32(); {{else}} reader.ReadByte(); {{end}}
         switch(code)
         {
-        {{range .Values}}
+        {{range .Constants}}
         case {{.Value}}:
             return {{$Enum}}.{{title .Name}};
         {{end}}
@@ -67,13 +67,13 @@ public class {{$Struct}}
     public void Marshal(Writer writer)  throws Exception
     {
 {{range .Fields}}
-{{marshalField .}}
+        {{marshalField .}}
 {{end}}
     }
     public void Unmarshal(Reader reader) throws Exception
     {
 {{range .Fields}}
-{{unmarshalField .}}
+        {{unmarshalField .}}
 {{end}}
     }
 }
@@ -84,7 +84,7 @@ public class {{$Struct}}
 
 public interface {{$Contract}} {
 {{range .Methods}}
-    {{resultype .Return}} {{title .Name}}({{paramsDecl .Params}}) throws Exception;
+    {{returnParam .Return}} {{title .Name}}({{params .Params}}) throws Exception;
 {{end}}
 }
 {{end}}
@@ -98,7 +98,7 @@ public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.
     public {{$Contract}}Dispatcher({{$Contract}} service) {
         this.service = service;
     }
-    public com.github.gsdocker.gsrpc.Return Dispatch(com.github.gsdocker.gsrpc.Call call) throws Exception
+    public com.gsrpc.Response Dispatch(com.gsrpc.Request call) throws Exception
     {
         switch(call.getMethod()){
         {{range .Methods}}
@@ -106,12 +106,11 @@ public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.
 {{range .Params}}{{unmarshalParam . "call" 4}}{{end}}
                 {{methodcall .}}
                 {{if .Return}}
-                com.github.gsdocker.gsrpc.Param[] params = new com.github.gsdocker.gsrpc.Param[{{params .Return}}];
-{{marshalReturnParams .Return}}
-                com.github.gsdocker.gsrpc.Return callReturn = new com.github.gsdocker.gsrpc.Return();
+{{marshalReturn .Return "ret" 4}}
+                com.gsrpc.Return callReturn = new com.gsrpc.Return();
                 callReturn.setID(call.getID());
                 callReturn.setService(call.getService());
-                callReturn.setParams(params);
+                callReturn.setContent(ret)
                 return callReturn;
                 {{else}}
                 break;
@@ -123,8 +122,9 @@ public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.
     }
 }
 {{end}}
-{{define "RPC"}}
-{{$Contract := title .Name}}
+
+
+{{define "RPC"}}{{$Contract := title .Name}}
 /*
  * {{title .Name}} generate by gs2java,don't modify it manually
  */

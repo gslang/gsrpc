@@ -485,7 +485,11 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 	return "unknown"
 }
 
-func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) {
+func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) bool {
+
+	if strings.HasPrefix(script.Package, "gslang.") {
+		return false
+	}
 
 	codegen.header.Reset()
 	codegen.content.Reset()
@@ -520,6 +524,8 @@ func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Scri
 	for k, v := range imports {
 		codegen.imports[k] = v
 	}
+
+	return true
 }
 
 func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {

@@ -9,11 +9,8 @@ import (
 	"strings"
 	"text/template"
 
-	"go/format"
-
 	"github.com/gsdocker/gserrors"
 	"github.com/gsdocker/gslogger"
-	"github.com/gsdocker/gsos/fs"
 	"github.com/gsrpc/gslang"
 	"github.com/gsrpc/gslang/ast"
 	"github.com/gsrpc/gslang/lexer"
@@ -80,19 +77,15 @@ var defaultval = map[lexer.TokenType]string{
 }
 
 var imports = map[string]string{
-	"gorpc.":    "github.com/gsrpc/gorpc",
-	"fmt.":      "fmt",
-	"bytes.":    "bytes",
-	"gsrpc.":    "com/gsrpc",
-	"gserrors.": "github.com/gsdocker/gserrors",
+	"Writer":     "import com.gsrpc.Writer",
+	"Reader":     "import com.gsrpc.Reader",
+	"ByteBuffer": "import java.nio.ByteBuffer",
 }
 
 type _CodeGen struct {
 	gslogger.Log                    // Log APIs
 	rootpath     string             // root path
 	script       *ast.Script        // current script
-	header       bytes.Buffer       // header writer
-	content      bytes.Buffer       // content writer
 	tpl          *template.Template // code generate template
 	imports      map[string]string  // imports
 	packageName  string             // package name
@@ -125,6 +118,13 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 		"notVoid":        codeGen.notVoid,
 		"marshalField":   codeGen.marshalfield,
 		"unmarshalField": codeGen.unmarshalfield,
+		"unmarshalParam": codeGen.unmarshalParam,
+		"methodcall":     codeGen.methodcall,
+		"marshalParam":   codeGen.marshalParam,
+		"marshalReturn":  codeGen.marshalReturn,
+		"methodRPC":      codeGen.methodRPC,
+		"marshalParams":  codeGen.marshalParams,
+		"callback":       codeGen.callback,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -136,6 +136,145 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	codeGen.tpl = tpl
 
 	return codeGen, nil
+}
+
+func (codegen *_CodeGen) callback(method *ast.Method) string {
+
+	var buff bytes.Buffer
+
+	buff.WriteString("future.Complete(null, ")
+
+	if codegen.notVoid(method.Return) {
+		buff.WriteString("returnParam, ")
+	}
+
+	buff.WriteString(");")
+
+	return strings.Replace(buff.String(), ", );", ");", -1)
+}
+
+func (codegen *_CodeGen) marshalParams(params []*ast.Param) string {
+
+	var buff bytes.Buffer
+
+	for _, param := range params {
+
+		buff.WriteString(codegen.marshalParam(param, fmt.Sprintf("arg%d", param.ID), 2))
+	}
+
+	return buff.String()
+}
+
+func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
+
+	var buff bytes.Buffer
+
+	buff.WriteString(fmt.Sprintf("void %s(", strings.Title(method.Name())))
+
+	for _, v := range method.Params {
+		buff.WriteString(fmt.Sprintf("%s arg%d, ", codegen.typeName(v.Type), v.ID))
+	}
+
+	buff.WriteString("final com.github.gsrpc.Future future)")
+
+	return buff.String()
+}
+
+func (codegen *_CodeGen) marshalReturn(typeDecl ast.Type, varname string, indent int) string {
+	var buff bytes.Buffer
+
+	writeindent(&buff, indent)
+
+	buff.WriteString("{\n\n")
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString("com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();\n\n")
+
+	buff.WriteString(codegen.writeType(varname, typeDecl, indent+1))
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString("byte[] returnParam = writer.Content();\n\n")
+
+	writeindent(&buff, indent)
+
+	buff.WriteString("}\n\n")
+	return buff.String()
+}
+
+func (codegen *_CodeGen) marshalParam(param *ast.Param, varname string, indent int) string {
+	var buff bytes.Buffer
+
+	writeindent(&buff, indent)
+
+	buff.WriteString("{\n\n")
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString("com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();\n\n")
+
+	buff.WriteString(codegen.writeType(varname, param.Type, indent+1))
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString("com.gsrpc.Param param = new com.gsrpc.Param();\n\n")
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString("param.setContent(writer.Content());\n\n")
+
+	writeindent(&buff, indent+1)
+
+	buff.WriteString(fmt.Sprintf("params[%d] = (param);\n\n", param.ID))
+
+	writeindent(&buff, indent)
+
+	buff.WriteString("}\n\n")
+	return buff.String()
+}
+
+func (codegen *_CodeGen) unmarshalParam(param *ast.Param, varname string, ident int) string {
+	var buff bytes.Buffer
+
+	writeindent(&buff, ident)
+
+	buff.WriteString(fmt.Sprintf("%s arg%d = %s;\n\n", codegen.typeName(param.Type), param.ID, codegen.defaultVal(param.Type)))
+
+	writeindent(&buff, ident)
+
+	buff.WriteString("{\n\n")
+
+	writeindent(&buff, ident+1)
+
+	buff.WriteString(fmt.Sprintf("com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(%s.getParams()[%d].getContent());\n\n", varname, param.ID))
+
+	buff.WriteString(codegen.readType(fmt.Sprintf("arg%d", param.ID), param.Type, ident+1))
+
+	writeindent(&buff, ident)
+
+	buff.WriteString("}\n\n")
+
+	return buff.String()
+}
+
+func (codegen *_CodeGen) methodcall(method *ast.Method) string {
+
+	var buff bytes.Buffer
+
+	if !codegen.notVoid(method.Return) {
+		buff.WriteString(fmt.Sprintf("%s(", strings.Title(method.Name())))
+	} else {
+		buff.WriteString(fmt.Sprintf("%s ret = %s(", codegen.typeName(method.Return), strings.Title(method.Name())))
+	}
+
+	for i := range method.Params {
+		buff.WriteString(fmt.Sprintf("arg%d, ", i))
+	}
+
+	buff.WriteString(");")
+
+	return strings.Replace(buff.String(), ", );", ");", -1)
 }
 
 func fieldname(name string) string {
@@ -269,7 +408,7 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 	switch typeDecl.(type) {
 	case *ast.BuiltinType:
 		builtinType := typeDecl.(*ast.BuiltinType)
-		return fmt.Sprintf("%s(%s)", writeMapping[builtinType.Type], valname)
+		return fmt.Sprintf("%s(%s);", writeMapping[builtinType.Type], valname)
 	case *ast.TypeRef:
 		typeRef := typeDecl.(*ast.TypeRef)
 
@@ -299,7 +438,7 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("writer.WriteUint16((short)%s.length);\n", valname))
+			stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n", valname))
 
 			writeindent(&stream, indent)
 
@@ -316,12 +455,12 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 		}
 
 		if isbytes {
-			return fmt.Sprintf("writer.WriteseqBytes(%s)", valname)
+			return fmt.Sprintf("writer.WriteseqBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
 
-		stream.WriteString(fmt.Sprintf("writer.WriteUint16((short)%s.length);\n", valname))
+		stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n", valname))
 
 		stream.WriteString(fmt.Sprintf("for(%s v%d : %s){\n", codegen.typeName(seq.Component), indent, valname))
 
@@ -349,14 +488,7 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		return codegen.readType(valname, typeRef.Ref, indent)
 
 	case *ast.Enum, *ast.Table:
-
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
-
-		if prefix != "" {
-			return fmt.Sprintf("%s = %s.%s.Unmarshal(reader);", valname, prefix, name)
-		}
-
-		return fmt.Sprintf("%s = %s.Unmarshal(reader);", valname, name)
+		return fmt.Sprintf("%s.Unmarshal(reader);", valname)
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
@@ -377,7 +509,7 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUint16();\n\n", indent))
+			stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUInt16();\n\n", indent))
 
 			writeindent(&stream, indent)
 
@@ -390,6 +522,8 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 			writeindent(&stream, indent+1)
 
 			stream.WriteString(fmt.Sprintf("%s v%d = %s;\n\n", codegen.typeName(seq.Component), indent, codegen.defaultVal(seq.Component)))
+
+			writeindent(&stream, indent+1)
 
 			stream.WriteString(codegen.readType(fmt.Sprintf("v%d", indent), seq.Component, indent+1))
 
@@ -413,7 +547,7 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 
 		var stream bytes.Buffer
 
-		stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUint16();\n\n", indent))
+		stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUInt16();\n\n", indent))
 
 		writeindent(&stream, indent)
 
@@ -469,11 +603,7 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
 
-		if seq.Size != -1 {
-			return fmt.Sprintf("%s[%d]", codegen.typeName(seq.Component), seq.Size)
-		}
-
-		return fmt.Sprintf("seqseq<%s>", codegen.typeName(seq.Component))
+		return fmt.Sprintf("%s[]", codegen.typeName(seq.Component))
 	}
 
 	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", codegen.typeName)
@@ -499,36 +629,29 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 
 		if prefix != "" {
-			return prefix + "." + name + "" + enum.Constants[0].Name()
+			return prefix + "." + name + "." + enum.Constants[0].Name()
 		}
 
-		return name + "" + enum.Constants[0].Name()
+		return name + "." + enum.Constants[0].Name()
 
 	case *ast.Table:
 
 		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 
 		if prefix != "" {
-			return prefix + ".New" + name + "()"
+			return "new " + prefix + "." + name + "()"
 		}
 
-		return "New" + name + "()"
+		return "new " + name + "()"
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
 
 		if seq.Size != -1 {
-
-			var buff bytes.Buffer
-
-			if err := codegen.tpl.ExecuteTemplate(&buff, "create_seq", seq); err != nil {
-				gserrors.Panicf(err, "exec template(create_seq) for %s errir", seq)
-			}
-
-			return buff.String()
+			return fmt.Sprintf("new %s[%d]", codegen.typeName(seq.Component), seq.Size)
 		}
 
-		return "nil"
+		return "null"
 	}
 
 	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", codegen.typeName)
@@ -536,41 +659,59 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 	return "unknown"
 }
 
-func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) {
+func javaPackageName(origin string) string {
 
-	codegen.header.Reset()
-	codegen.content.Reset()
+	return strings.Replace(origin, "/", ".", -1)
+}
 
-	codegen.script = script
+func (codegen *_CodeGen) writeJavaFile(name string, expr ast.Expr, content []byte) {
 
-	codegen.packageName = script.Package
-	codegen.scriptPath = strings.Replace(codegen.packageName, ".", "/", -1)
+	var buff bytes.Buffer
 
-	lang, ok := gslang.FindAnnotation(script, "gslang.Lang")
+	jPackageName := javaPackageName(codegen.packageName)
 
-	if ok {
+	buff.WriteString(fmt.Sprintf("package %s;\n\n", jPackageName))
 
-		langName, ok := lang.Args.NamedArg("Name")
+	for _, i := range codegen.imports {
 
-		if ok {
-			if compiler.Eval().EvalString(langName) == "golang" {
-				packageName, ok := lang.Args.NamedArg("Package")
-				if ok {
-					codegen.packageName = compiler.Eval().EvalString(packageName)
-					codegen.scriptPath = codegen.packageName
-				}
-			}
-		}
+		buff.WriteString(fmt.Sprintf("%s;\n\n", i))
+
 	}
 
-	path := strings.Replace(codegen.packageName, ".", "/", -1)
-	codegen.header.WriteString(fmt.Sprintf("package %s\n\n", filepath.Base(path)))
+	buff.Write(content)
+
+	packagename := strings.Replace(jPackageName, ".", "/", -1)
+
+	fullpath := filepath.Join(codegen.rootpath, packagename, name+".java")
+
+	if err := os.MkdirAll(filepath.Dir(fullpath), 0755); err != nil {
+		gserrors.Panicf(err, "create output directory error")
+	}
+
+	codegen.D("write file :%s", fullpath)
+
+	if err := ioutil.WriteFile(fullpath, buff.Bytes(), 0644); err != nil {
+		gserrors.Panicf(err, "write generate stub code error")
+	}
+}
+
+func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) bool {
+
+	if strings.HasPrefix(script.Package, "gslang.") {
+		return false
+	}
+
+	codegen.packageName = script.Package
+
+	codegen.script = script
 
 	codegen.imports = make(map[string]string)
 
 	for k, v := range imports {
 		codegen.imports[k] = v
 	}
+
+	return true
 }
 
 func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {
@@ -582,71 +723,48 @@ func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {
 
 func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) {
 
-	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "table", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(table) for %s errir", tableType)
+	var buff bytes.Buffer
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "table", tableType); err != nil {
+		gserrors.Panicf(err, "exec template(table) for %s error", tableType)
 	}
+
+	codegen.writeJavaFile(tableType.Name(), tableType, buff.Bytes())
 }
 func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Table) {
-	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "exception", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(exception) for %s errir", tableType)
+
+	var buff bytes.Buffer
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "exception", tableType); err != nil {
+		gserrors.Panicf(err, "exec template(exception) for %s error", tableType)
 	}
+
+	codegen.writeJavaFile(tableType.Name(), tableType, buff.Bytes())
 }
 func (codegen *_CodeGen) Annotation(compiler *gslang.Compiler, annotation *ast.Table) {
 }
 func (codegen *_CodeGen) Enum(compiler *gslang.Compiler, enum *ast.Enum) {
-	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "enum", enum); err != nil {
-		gserrors.Panicf(err, "exec template(enum) for %s errir", enum)
+
+	var buff bytes.Buffer
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "enum", enum); err != nil {
+		gserrors.Panicf(err, "exec template(enum) for %s error", enum)
 	}
+
+	codegen.writeJavaFile(enum.Name(), enum, buff.Bytes())
 }
 func (codegen *_CodeGen) Contract(compiler *gslang.Compiler, contract *ast.Contract) {
-	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "contract", contract); err != nil {
-		gserrors.Panicf(err, "exec template(contract) for %s errir", contract)
+
+	var buff bytes.Buffer
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "contract", contract); err != nil {
+		gserrors.Panicf(err, "exec template(contract) for %s error", contract)
 	}
+
+	codegen.writeJavaFile(contract.Name(), contract, buff.Bytes())
 }
 
 // EndScript .
 func (codegen *_CodeGen) EndScript(compiler *gslang.Compiler) {
 
-	content := codegen.content.String()
-
-	packageName := codegen.script.Package
-
-	if packageName == "com.gsrpc" {
-		content = strings.Replace(content, "gorpc.", "", -1)
-	}
-
-	for k, v := range imports {
-		if strings.Contains(content, k) {
-			codegen.header.WriteString(fmt.Sprintf("import \"%s\"\n", v))
-		}
-	}
-
-	codegen.header.WriteString(content)
-
-	var err error
-	var sources []byte
-
-	fullpath := filepath.Join(codegen.rootpath, codegen.scriptPath, filepath.Base(codegen.script.Name())+".go")
-
-	sources, err = format.Source(codegen.header.Bytes())
-
-	if err != nil {
-		gserrors.Panicf(err, "format golang source codes error:%s", fullpath)
-	}
-
-	codegen.D("generate golang file :%s", fullpath)
-
-	if !fs.Exists(filepath.Dir(fullpath)) {
-		err := os.MkdirAll(filepath.Dir(fullpath), 0755)
-
-		if err != nil {
-			gserrors.Panicf(err, "format golang source codes error")
-		}
-	}
-
-	err = ioutil.WriteFile(fullpath, sources, 0644)
-
-	if err != nil {
-		gserrors.Panicf(err, "write generate golang file error")
-	}
 }
