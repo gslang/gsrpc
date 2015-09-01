@@ -173,14 +173,14 @@ public final class {{$Contract}}RPC {
     /**
      * gsrpc net interface
      */
-    private com.gsrpc.Net net;
+    private com.gsrpc.Channel net;
 
     /**
      * remote service id
      */
     private short serviceID;
 
-    public {{$Contract}}RPC(com.gsrpc.Net net, short serviceID){
+    public {{$Contract}}RPC(com.gsrpc.Channel net, short serviceID){
         this.net = net;
         this.serviceID = serviceID;
     }
