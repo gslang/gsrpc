@@ -487,15 +487,19 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n", valname))
+			stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n\n", valname))
+
+			writeindent(&stream, indent-1)
+
+			stream.WriteString(fmt.Sprintf("for(%s v%d : %s){\n\n", codegen.typeName(seq.Component), indent, valname))
 
 			writeindent(&stream, indent)
-
-			stream.WriteString(fmt.Sprintf("for(%s v%d : %s){\n", codegen.typeName(seq.Component), indent, valname))
 
 			stream.WriteString(codegen.writeType(fmt.Sprintf("v%d", indent), seq.Component, indent+1))
 
-			writeindent(&stream, indent)
+			stream.WriteString("\n\n")
+
+			writeindent(&stream, indent-1)
 
 			stream.WriteRune('}')
 
@@ -504,18 +508,24 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 		}
 
 		if isbytes {
-			return fmt.Sprintf("writer.WriteseqBytes(%s);", valname)
+			return fmt.Sprintf("writer.WriteArrayBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
 
-		stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n", valname))
+		stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n\n", valname))
 
-		stream.WriteString(fmt.Sprintf("for(%s v%d : %s){\n", codegen.typeName(seq.Component), indent, valname))
+		writeindent(&stream, indent-1)
+
+		stream.WriteString(fmt.Sprintf("for(%s v%d : %s){\n\n", codegen.typeName(seq.Component), indent, valname))
+
+		writeindent(&stream, indent)
 
 		stream.WriteString(codegen.writeType(fmt.Sprintf("v%d", indent), seq.Component, indent+1))
 
-		writeindent(&stream, indent)
+		stream.WriteString("\n\n")
+
+		writeindent(&stream, indent-1)
 
 		stream.WriteRune('}')
 
@@ -560,31 +570,31 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUInt16();\n\n", indent))
+			stream.WriteString(fmt.Sprintf("int max%d = reader.ReadUInt16();\n\n", indent))
+
+			writeindent(&stream, indent-1)
+
+			stream.WriteString(fmt.Sprintf("%s = new %s[max%d];\n\n", valname, codegen.arrayDefaultVal(seq.Component), indent))
+
+			writeindent(&stream, indent-1)
+
+			stream.WriteString(fmt.Sprintf("for(int i%d = 0; i%d < max%d; i%d ++ ){\n\n", indent, indent, indent, indent))
 
 			writeindent(&stream, indent)
-
-			stream.WriteString(fmt.Sprintf("%s = new %s[imax%d];\n\n", valname, codegen.typeName(seq.Component), indent))
-
-			writeindent(&stream, indent)
-
-			stream.WriteString(fmt.Sprintf("for(int i%d = 0; i%d < imax%d; i%d ++ ){\n\n", indent, indent, indent, indent))
-
-			writeindent(&stream, indent+1)
 
 			stream.WriteString(fmt.Sprintf("%s v%d = %s;\n\n", codegen.typeName(seq.Component), indent, codegen.defaultVal(seq.Component)))
 
-			writeindent(&stream, indent+1)
+			writeindent(&stream, indent)
 
 			stream.WriteString(codegen.readType(fmt.Sprintf("v%d", indent), seq.Component, indent+1))
 
-			stream.WriteRune('\n')
+			stream.WriteString("\n\n")
 
-			writeindent(&stream, indent+1)
+			writeindent(&stream, indent)
 
 			stream.WriteString(fmt.Sprintf("%s[i%d] = v%d;\n\n", valname, indent, indent))
 
-			writeindent(&stream, indent)
+			writeindent(&stream, indent-1)
 
 			stream.WriteRune('}')
 
@@ -593,34 +603,28 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		}
 
 		if isbytes {
-			return fmt.Sprintf("reader.ReadseqBytes(%s);", valname)
+			return fmt.Sprintf("reader.ReadArrayBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
 
-		stream.WriteString(fmt.Sprintf("int imax%d = reader.ReadUInt16();\n\n", indent))
+		stream.WriteString(fmt.Sprintf("for(int i%d = 0; i%d < %s.length; i%d ++ ){\n\n", indent, indent, valname, indent))
 
 		writeindent(&stream, indent)
 
-		stream.WriteString(fmt.Sprintf("%s = new %s[imax%d];\n\n", valname, codegen.typeName(seq.Component), indent))
+		stream.WriteString(fmt.Sprintf("%s v%d = %s[i%d];\n\n", codegen.typeName(seq.Component), indent, valname, indent))
 
 		writeindent(&stream, indent)
-
-		stream.WriteString(fmt.Sprintf("for(int i%d = 0; i%d < imax%d; i%d ++ ){\n\n", indent, indent, indent, indent))
-
-		writeindent(&stream, indent+1)
-
-		stream.WriteString(fmt.Sprintf("%s v%d = %s;\n\n", codegen.typeName(seq.Component), indent, codegen.defaultVal(seq.Component)))
 
 		stream.WriteString(codegen.readType(fmt.Sprintf("v%d", indent), seq.Component, indent+1))
 
-		stream.WriteRune('\n')
+		stream.WriteString("\n\n")
 
-		writeindent(&stream, indent+1)
+		writeindent(&stream, indent)
 
 		stream.WriteString(fmt.Sprintf("%s[i%d] = v%d;\n\n", valname, indent, indent))
 
-		writeindent(&stream, indent)
+		writeindent(&stream, indent-1)
 
 		stream.WriteRune('}')
 
@@ -697,18 +701,31 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 		return "new " + name + "()"
 
 	case *ast.Seq:
+		return fmt.Sprintf("new %s", codegen.arrayDefaultVal(typeDecl))
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return "unknown"
+}
+
+func (codegen *_CodeGen) arrayDefaultVal(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+
+	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
 
 		if seq.Size != -1 {
-			return fmt.Sprintf("new %s[%d]", codegen.typeName(seq.Component), seq.Size)
+			return fmt.Sprintf("%s[%d]", codegen.arrayDefaultVal(seq.Component), seq.Size)
 		}
 
-		return "null"
+		return fmt.Sprintf("%s[0]", codegen.arrayDefaultVal(seq.Component))
+
+	default:
+
+		return codegen.typeName(typeDecl)
+
 	}
-
-	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", codegen.typeName)
-
-	return "unknown"
 }
 
 func javaPackageName(origin string) string {
