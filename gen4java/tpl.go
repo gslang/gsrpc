@@ -143,18 +143,40 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
         {{range .Methods}}
         case {{.ID}}: {
 {{range .Params}}{{unmarshalParam . "call" 4}}{{end}}
-                {{methodcall .}}
 
-                com.gsrpc.Response callReturn = new com.gsrpc.Response();
-                callReturn.setID(call.getID());
-                callReturn.setService(call.getService());
+                try{
+                    {{methodcall .}}
 
-                {{if notVoid .Return}}
-{{marshalReturn .Return "ret" 4}}
-                callReturn.setContent(returnParam);
-                {{end}}
+                    com.gsrpc.Response callReturn = new com.gsrpc.Response();
+                    callReturn.setID(call.getID());
+                    callReturn.setService(call.getService());
+                    callReturn.setException((byte)-1);
 
-                return callReturn;
+                    {{if notVoid .Return}}
+    {{marshalReturn .Return "ret" 4}}
+                    callReturn.setContent(returnParam);
+                    {{end}}
+
+                    return callReturn;
+
+                } catch(Exception e){
+                    {{range .Exceptions}}
+                    if(e instanceof {{typeName .Type}}){
+
+                        com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();
+
+                        (({{typeName .Type}})e).Marshal(writer);
+
+                        com.gsrpc.Response callReturn = new com.gsrpc.Response();
+                        callReturn.setID(call.getID());
+                        callReturn.setService(call.getService());
+                        callReturn.setException((byte){{.ID}});
+                        callReturn.setContent(writer.Content());
+
+                        return callReturn;
+                    }
+                    {{end}}
+                }
             }
         {{end}}
         }
@@ -185,7 +207,7 @@ public final class {{$Contract}}RPC {
         this.serviceID = serviceID;
     }
 
-    {{range .Methods}}
+    {{range .Methods}}{{$Name := title .Name}}
     public {{methodRPC .}} throws Exception {
 
         com.gsrpc.Request request = new com.gsrpc.Request();
@@ -211,7 +233,30 @@ public final class {{$Contract}}RPC {
                     promise.Notify(e,null);
                     return;
                 }
+
                 try{
+
+                    if(callReturn.getException() != (byte)-1) {
+                        switch(callReturn.getException()) {
+                        {{range .Exceptions}}
+                        case {{.ID}}:{
+                            com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(callReturn.getContent());
+
+                            {{typeName .Type}} exception = {{defaultVal .Type}};
+
+                            {{readType "exception" .Type 4}}
+
+                            promise.Notify(exception,null);
+
+                            return;
+                        }
+                        {{end}}
+                        default:
+                            promise.Notify(new com.gsrpc.RemoteException(String.format("catch unknown exception(%d) for {{$Contract}}#{{$Name}}",callReturn.getException())),null);
+                            return;
+                        }
+                    }
+
                     {{if notVoid .Return}}
                     {{unmarshalReturn .Return "callReturn" 5}}
                     promise.Notify(null,returnParam);
