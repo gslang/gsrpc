@@ -101,30 +101,31 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	}
 
 	funcs := template.FuncMap{
-		"title":          strings.Title,
-		"fieldName":      fieldname,
-		"enumFields":     codeGen.enumFields,
-		"enumType":       codeGen.enumType,
-		"enumSize":       codeGen.enumSize,
-		"typeName":       codeGen.typeName,
-		"defaultVal":     codeGen.defaultVal,
-		"builtin":        codeGen.builtin,
-		"readType":       codeGen.readType,
-		"writeType":      codeGen.writeType,
-		"params":         codeGen.params,
-		"returnParam":    codeGen.returnParam,
-		"callArgs":       codeGen.callArgs,
-		"returnArgs":     codeGen.returnArgs,
-		"notVoid":        codeGen.notVoid,
-		"marshalField":   codeGen.marshalfield,
-		"unmarshalField": codeGen.unmarshalfield,
-		"unmarshalParam": codeGen.unmarshalParam,
-		"methodcall":     codeGen.methodcall,
-		"marshalParam":   codeGen.marshalParam,
-		"marshalReturn":  codeGen.marshalReturn,
-		"methodRPC":      codeGen.methodRPC,
-		"marshalParams":  codeGen.marshalParams,
-		"callback":       codeGen.callback,
+		"title":           strings.Title,
+		"fieldName":       fieldname,
+		"enumFields":      codeGen.enumFields,
+		"enumType":        codeGen.enumType,
+		"enumSize":        codeGen.enumSize,
+		"typeName":        codeGen.typeName,
+		"defaultVal":      codeGen.defaultVal,
+		"builtin":         codeGen.builtin,
+		"readType":        codeGen.readType,
+		"writeType":       codeGen.writeType,
+		"params":          codeGen.params,
+		"returnParam":     codeGen.returnParam,
+		"callArgs":        codeGen.callArgs,
+		"returnArgs":      codeGen.returnArgs,
+		"notVoid":         codeGen.notVoid,
+		"marshalField":    codeGen.marshalfield,
+		"unmarshalField":  codeGen.unmarshalfield,
+		"unmarshalParam":  codeGen.unmarshalParam,
+		"methodcall":      codeGen.methodcall,
+		"marshalParam":    codeGen.marshalParam,
+		"marshalReturn":   codeGen.marshalReturn,
+		"methodRPC":       codeGen.methodRPC,
+		"marshalParams":   codeGen.marshalParams,
+		"callback":        codeGen.callback,
+		"unmarshalReturn": codeGen.unmarshalReturn,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -175,7 +176,11 @@ func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
 		buff.WriteString(fmt.Sprintf("%s arg%d, ", codegen.typeName(v.Type), v.ID))
 	}
 
-	buff.WriteString("final com.github.gsrpc.Future future)")
+	if codegen.notVoid(method.Return) {
+		buff.WriteString(fmt.Sprintf("final com.gsrpc.Promise<%s> promise,final int timeout)", codegen.typeName(method.Return)))
+	} else {
+		buff.WriteString("final com.gsrpc.Promise<Void> promise,final int timeout)")
+	}
 
 	return buff.String()
 }
@@ -185,17 +190,25 @@ func (codegen *_CodeGen) marshalReturn(typeDecl ast.Type, varname string, indent
 
 	writeindent(&buff, indent)
 
+	buff.WriteString("byte[] returnParam;\n\n")
+
+	writeindent(&buff, indent)
+
 	buff.WriteString("{\n\n")
 
 	writeindent(&buff, indent+1)
 
 	buff.WriteString("com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();\n\n")
 
+	writeindent(&buff, indent+1)
+
 	buff.WriteString(codegen.writeType(varname, typeDecl, indent+1))
+
+	buff.WriteString("\n\n")
 
 	writeindent(&buff, indent+1)
 
-	buff.WriteString("byte[] returnParam = writer.Content();\n\n")
+	buff.WriteString("returnParam = writer.Content();\n\n")
 
 	writeindent(&buff, indent)
 
@@ -214,7 +227,11 @@ func (codegen *_CodeGen) marshalParam(param *ast.Param, varname string, indent i
 
 	buff.WriteString("com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();\n\n")
 
+	writeindent(&buff, indent+1)
+
 	buff.WriteString(codegen.writeType(varname, param.Type, indent+1))
+
+	buff.WriteString("\n\n")
 
 	writeindent(&buff, indent+1)
 
@@ -234,6 +251,34 @@ func (codegen *_CodeGen) marshalParam(param *ast.Param, varname string, indent i
 	return buff.String()
 }
 
+func (codegen *_CodeGen) unmarshalReturn(typeDecl ast.Type, varname string, ident int) string {
+	var buff bytes.Buffer
+
+	writeindent(&buff, ident)
+
+	buff.WriteString(fmt.Sprintf("%s returnParam = %s;\n\n", codegen.typeName(typeDecl), codegen.defaultVal(typeDecl)))
+
+	writeindent(&buff, ident)
+
+	buff.WriteString("{\n\n")
+
+	writeindent(&buff, ident+1)
+
+	buff.WriteString(fmt.Sprintf("com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(%s.getContent());\n\n", varname))
+
+	writeindent(&buff, ident+1)
+
+	buff.WriteString(codegen.readType("returnParam", typeDecl, ident+1))
+
+	buff.WriteString("\n\n")
+
+	writeindent(&buff, ident)
+
+	buff.WriteString("}\n\n")
+
+	return buff.String()
+}
+
 func (codegen *_CodeGen) unmarshalParam(param *ast.Param, varname string, ident int) string {
 	var buff bytes.Buffer
 
@@ -249,7 +294,11 @@ func (codegen *_CodeGen) unmarshalParam(param *ast.Param, varname string, ident 
 
 	buff.WriteString(fmt.Sprintf("com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(%s.getParams()[%d].getContent());\n\n", varname, param.ID))
 
+	writeindent(&buff, ident+1)
+
 	buff.WriteString(codegen.readType(fmt.Sprintf("arg%d", param.ID), param.Type, ident+1))
+
+	buff.WriteString("\n\n")
 
 	writeindent(&buff, ident)
 
@@ -263,9 +312,9 @@ func (codegen *_CodeGen) methodcall(method *ast.Method) string {
 	var buff bytes.Buffer
 
 	if !codegen.notVoid(method.Return) {
-		buff.WriteString(fmt.Sprintf("%s(", strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("this.service.%s(", strings.Title(method.Name())))
 	} else {
-		buff.WriteString(fmt.Sprintf("%s ret = %s(", codegen.typeName(method.Return), strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("%s ret = this.service.%s(", codegen.typeName(method.Return), strings.Title(method.Name())))
 	}
 
 	for i := range method.Params {
@@ -349,7 +398,7 @@ func (codegen *_CodeGen) params(params []*ast.Param) string {
 	buff.WriteString("(")
 
 	for _, param := range params {
-		buff.WriteString(fmt.Sprintf("%s %s, ", param.Name(), codegen.typeName(param.Type)))
+		buff.WriteString(fmt.Sprintf("%s %s, ", codegen.typeName(param.Type), param.Name()))
 	}
 
 	buff.WriteString(")")
@@ -373,10 +422,10 @@ func (codegen *_CodeGen) callArgs(params []*ast.Param) string {
 
 func (codegen *_CodeGen) returnParam(param ast.Type) string {
 	if codegen.notVoid(param) {
-		return fmt.Sprintf("(retval %s,err error)", codegen.typeName(param))
+		return fmt.Sprintf("%s", codegen.typeName(param))
 	}
 
-	return "(err error)"
+	return "void"
 }
 
 func (codegen *_CodeGen) returnArgs(param ast.Type) string {
@@ -470,9 +519,11 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 
 		stream.WriteRune('}')
 
+		return stream.String()
+
 	}
 
-	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", codegen.typeName)
+	gserrors.Panicf(nil, "writeType  error: unsupport type(%s)", typeDecl)
 
 	return "unknown"
 }
@@ -585,6 +636,7 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 	switch typeDecl.(type) {
 	case *ast.BuiltinType:
 		builtinType := typeDecl.(*ast.BuiltinType)
+
 		return builtin[builtinType.Type]
 	case *ast.TypeRef:
 		typeRef := typeDecl.(*ast.TypeRef)
@@ -606,7 +658,7 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 		return fmt.Sprintf("%s[]", codegen.typeName(seq.Component))
 	}
 
-	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", codegen.typeName)
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
 
 	return "unknown"
 }
@@ -762,6 +814,22 @@ func (codegen *_CodeGen) Contract(compiler *gslang.Compiler, contract *ast.Contr
 	}
 
 	codegen.writeJavaFile(contract.Name(), contract, buff.Bytes())
+
+	buff.Reset()
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "dispatcher", contract); err != nil {
+		gserrors.Panicf(err, "exec template(contract) for %s error", contract)
+	}
+
+	codegen.writeJavaFile(contract.Name()+"Dispatcher", contract, buff.Bytes())
+
+	buff.Reset()
+
+	if err := codegen.tpl.ExecuteTemplate(&buff, "rpc", contract); err != nil {
+		gserrors.Panicf(err, "exec template(contract) for %s error", contract)
+	}
+
+	codegen.writeJavaFile(contract.Name()+"RPC", contract, buff.Bytes())
 }
 
 // EndScript .

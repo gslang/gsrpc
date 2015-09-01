@@ -44,6 +44,39 @@ public enum {{title .Name}} {
 }
 {{end}}
 
+{{define "exception"}}{{$Struct := title .Name}}
+public class {{$Struct}} extends Exception
+{
+{{range .Fields}}
+    private  {{typeName .Type}} {{fieldName .Name}} = {{defaultVal .Type}};
+{{end}}
+
+{{range .Fields}}
+    public {{typeName .Type}} get{{title .Name}}()
+    {
+        return this.{{fieldName .Name}};
+    }
+    public void set{{title .Name}}({{typeName .Type}} arg)
+    {
+        this.{{fieldName .Name}} = arg;
+    }
+{{end}}
+    public void Marshal(Writer writer)  throws Exception
+    {
+{{range .Fields}}
+        {{marshalField .}}
+{{end}}
+    }
+    public void Unmarshal(Reader reader) throws Exception
+    {
+{{range .Fields}}
+        {{unmarshalField .}}
+{{end}}
+    }
+}
+{{end}}
+
+
 {{define "table"}}{{$Struct := title .Name}}
 /*
  * {{title .Name}} generate by gs2java,don't modify it manually
@@ -80,24 +113,30 @@ public class {{$Struct}}
 {{end}}
 
 
-{{define "Service"}}{{$Contract := title .Name}}
+{{define "contract"}}{{$Contract := title .Name}}
 
 public interface {{$Contract}} {
 {{range .Methods}}
-    {{returnParam .Return}} {{title .Name}}({{params .Params}}) throws Exception;
+    {{returnParam .Return}} {{title .Name}} {{params .Params}} throws Exception;
 {{end}}
 }
+
 {{end}}
-{{define "AbstractService"}}
+
+
+{{define "dispatcher"}}
 {{$Contract := title .Name}}
 /*
  * {{title .Name}} generate by gs2java,don't modify it manually
  */
-public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.Dispatcher {
+public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
+
     private {{$Contract}} service;
+
     public {{$Contract}}Dispatcher({{$Contract}} service) {
         this.service = service;
     }
+
     public com.gsrpc.Response Dispatch(com.gsrpc.Request call) throws Exception
     {
         switch(call.getMethod()){
@@ -105,16 +144,17 @@ public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.
         case {{.ID}}: {
 {{range .Params}}{{unmarshalParam . "call" 4}}{{end}}
                 {{methodcall .}}
-                {{if .Return}}
-{{marshalReturn .Return "ret" 4}}
-                com.gsrpc.Return callReturn = new com.gsrpc.Return();
+
+                com.gsrpc.Response callReturn = new com.gsrpc.Response();
                 callReturn.setID(call.getID());
                 callReturn.setService(call.getService());
-                callReturn.setContent(ret)
-                return callReturn;
-                {{else}}
-                break;
+
+                {{if notVoid .Return}}
+{{marshalReturn .Return "ret" 4}}
+                callReturn.setContent(returnParam);
                 {{end}}
+
+                return callReturn;
             }
         {{end}}
         }
@@ -124,43 +164,62 @@ public final class {{$Contract}}Dispatcher implements com.github.gsdocker.gsrpc.
 {{end}}
 
 
-{{define "RPC"}}{{$Contract := title .Name}}
+{{define "rpc"}}{{$Contract := title .Name}}
 /*
  * {{title .Name}} generate by gs2java,don't modify it manually
  */
 public final class {{$Contract}}RPC {
-    private com.github.gsdocker.gsrpc.Net net;
-    private short serviceid;
-    public {{$Contract}}RPC(com.github.gsdocker.gsrpc.Net net, short serviceid){
+
+    /**
+     * gsrpc net interface
+     */
+    private com.gsrpc.Net net;
+
+    /**
+     * remote service id
+     */
+    private short serviceID;
+
+    public {{$Contract}}RPC(com.gsrpc.Net net, short serviceID){
         this.net = net;
-        this.serviceid = serviceid;
+        this.serviceID = serviceID;
     }
+
     {{range .Methods}}
     public {{methodRPC .}} throws Exception {
-        com.github.gsdocker.gsrpc.Call call = new com.github.gsdocker.gsrpc.Call();
-        call.setService(this.serviceid);
-        call.setMethod((short){{.ID}});
+
+        com.gsrpc.Request request = new com.gsrpc.Request();
+
+        request.setService(this.serviceID);
+
+        request.setMethod((short){{.ID}});
+
         {{if .Params}}
-        com.github.gsdocker.gsrpc.Param[] params = new com.github.gsdocker.gsrpc.Param[{{params .Params}}];
+        com.gsrpc.Param[] params = new com.gsrpc.Param[{{len .Params}}];
 {{marshalParams .Params}}
-        call.setParams(params);
+        request.setParams(params);
         {{end}}
-        this.net.send(call,new com.github.gsdocker.gsrpc.Callback(){
+
+        this.net.send(request,new com.gsrpc.Callback(){
             @Override
             public int getTimeout() {
                 return timeout;
             }
             @Override
-            public void Return(Exception e,com.github.gsdocker.gsrpc.Return callReturn){
+            public void Return(Exception e,com.gsrpc.Response callReturn){
                 if (e != null) {
-                    completeHandler.Complete(e);
+                    promise.Notify(e,null);
                     return;
                 }
                 try{
-{{range .Return}}{{unmarshalParam . "callReturn" 5}}{{end}}
-                    {{callback .}}
+                    {{if notVoid .Return}}
+                    {{unmarshalReturn .Return "callReturn" 5}}
+                    promise.Notify(null,returnParam);
+                    {{else}}
+                    promise.Notify(null,null);
+                    {{end}}
                 }catch(Exception e1) {
-                    completeHandler.Complete(e1);
+                    promise.Notify(e1,null);
                 }
             }
         });

@@ -4,7 +4,6 @@ using gslang.annotations.Usage;
 using gslang.annotations.Target;
 using gslang.Exception;
 using gslang.Flag;
-using com.gsrpc.Message;
 
 
 enum TimeUnit{
@@ -41,7 +40,7 @@ table Timeout {
 // remote exception
 @Exception
 table RemoteException {
-    Message message;
+    
 }
 
 table KV {
