@@ -573,7 +573,10 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 
 		return codegen.readType(valname, typeRef.Ref, indent)
 
-	case *ast.Enum, *ast.Table:
+	case *ast.Enum:
+		return fmt.Sprintf("%s = %s.Unmarshal(reader);", valname, codegen.typeName(typeDecl))
+
+	case *ast.Table:
 		return fmt.Sprintf("%s.Unmarshal(reader);", valname)
 
 	case *ast.Seq:
