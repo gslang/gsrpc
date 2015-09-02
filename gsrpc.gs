@@ -1,6 +1,7 @@
 package com.gsrpc;
 
 using gslang.Lang;
+using gslang.Exception;
 
 @Lang(Name:"golang",Package:"github.com/gsrpc/gorpc")
 
@@ -63,4 +64,8 @@ table Device {
 table WhoAmI {
     Device      ID;             // device name
     byte[]      Context;         // context data
+}
+
+@Exception
+table InvalidContract {
 }

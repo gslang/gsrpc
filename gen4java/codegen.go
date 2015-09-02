@@ -29,6 +29,7 @@ var builtin = map[lexer.TokenType]string{
 	lexer.KeyFloat64: "double",
 	lexer.KeyBool:    "boolean",
 	lexer.KeyString:  "String",
+	lexer.KeyVoid:    "Void",
 }
 
 var readMapping = map[lexer.TokenType]string{
@@ -101,6 +102,7 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	}
 
 	funcs := template.FuncMap{
+		"exception":       exception,
 		"title":           strings.Title,
 		"fieldName":       fieldname,
 		"enumFields":      codeGen.enumFields,
@@ -126,6 +128,7 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 		"marshalParams":   codeGen.marshalParams,
 		"callback":        codeGen.callback,
 		"unmarshalReturn": codeGen.unmarshalReturn,
+		"constructor":     codeGen.constructor,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -137,6 +140,14 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	codeGen.tpl = tpl
 
 	return codeGen, nil
+}
+
+func exception(name string) string {
+	if strings.HasSuffix(name, "Exception") {
+		return strings.Title(name)
+	}
+
+	return strings.Title(name) + "Exception"
 }
 
 func (codegen *_CodeGen) callback(method *ast.Method) string {
@@ -152,6 +163,20 @@ func (codegen *_CodeGen) callback(method *ast.Method) string {
 	buff.WriteString(");")
 
 	return strings.Replace(buff.String(), ", );", ");", -1)
+}
+
+func (codegen *_CodeGen) constructor(fields []*ast.Field) string {
+	var buff bytes.Buffer
+
+	buff.WriteString("(")
+
+	for _, field := range fields {
+		buff.WriteString(fmt.Sprintf("%s %s, ", codegen.typeName(field.Type), fieldname(field.Name())))
+	}
+
+	buff.WriteString(")")
+
+	return strings.Replace(buff.String(), ", )", " )", -1)
 }
 
 func (codegen *_CodeGen) marshalParams(params []*ast.Param) string {
@@ -170,17 +195,17 @@ func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
 
 	var buff bytes.Buffer
 
-	buff.WriteString(fmt.Sprintf("void %s(", strings.Title(method.Name())))
+	if codegen.notVoid(method.Return) {
+		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.typeName(method.Return), strings.Title(method.Name())))
+	} else {
+		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", strings.Title(method.Name())))
+	}
 
 	for _, v := range method.Params {
 		buff.WriteString(fmt.Sprintf("%s arg%d, ", codegen.typeName(v.Type), v.ID))
 	}
 
-	if codegen.notVoid(method.Return) {
-		buff.WriteString(fmt.Sprintf("final com.gsrpc.Promise<%s> promise,final int timeout)", codegen.typeName(method.Return)))
-	} else {
-		buff.WriteString("final com.gsrpc.Promise<Void> promise,final int timeout)")
-	}
+	buff.WriteString("final int timeout)")
 
 	return buff.String()
 }
@@ -808,7 +833,7 @@ func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Tab
 		gserrors.Panicf(err, "exec template(exception) for %s error", tableType)
 	}
 
-	codegen.writeJavaFile(tableType.Name(), tableType, buff.Bytes())
+	codegen.writeJavaFile(exception(tableType.Name()), tableType, buff.Bytes())
 }
 func (codegen *_CodeGen) Annotation(compiler *gslang.Compiler, annotation *ast.Table) {
 }

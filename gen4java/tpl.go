@@ -44,12 +44,18 @@ public enum {{title .Name}} {
 }
 {{end}}
 
-{{define "exception"}}{{$Struct := title .Name}}
+{{define "exception"}}{{$Struct := exception .Name}}
 public class {{$Struct}} extends Exception
 {
 {{range .Fields}}
     private  {{typeName .Type}} {{fieldName .Name}} = {{defaultVal .Type}};
 {{end}}
+
+    public {{$Struct}}{{constructor .Fields}} {
+    {{range .Fields}}
+        this.{{fieldName .Name}} = {{fieldName .Name}};
+    {{end}}
+    }
 
 {{range .Fields}}
     public {{typeName .Type}} get{{title .Name}}()
@@ -222,15 +228,12 @@ public final class {{$Contract}}RPC {
         request.setParams(params);
         {{end}}
 
-        this.net.send(request,new com.gsrpc.Callback(){
-            @Override
-            public int getTimeout() {
-                return timeout;
-            }
+        com.gsrpc.Promise<{{typeName .Return}}> promise = new com.gsrpc.Promise<{{typeName .Return}}>(timeout){
             @Override
             public void Return(Exception e,com.gsrpc.Response callReturn){
+
                 if (e != null) {
-                    promise.Notify(e,null);
+                    Notify(e,null);
                     return;
                 }
 
@@ -238,36 +241,40 @@ public final class {{$Contract}}RPC {
 
                     if(callReturn.getException() != (byte)-1) {
                         switch(callReturn.getException()) {
-                        {{range .Exceptions}}
-                        case {{.ID}}:{
+                            {{range .Exceptions}}
+                            case {{.ID}}:{
                             com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(callReturn.getContent());
 
                             {{typeName .Type}} exception = {{defaultVal .Type}};
 
                             {{readType "exception" .Type 4}}
 
-                            promise.Notify(exception,null);
+                            Notify(exception,null);
 
                             return;
                         }
                         {{end}}
                         default:
-                            promise.Notify(new com.gsrpc.RemoteException(String.format("catch unknown exception(%d) for {{$Contract}}#{{$Name}}",callReturn.getException())),null);
+                            Notify(new com.gsrpc.RemoteException(String.format("catch unknown exception(%d) for {{$Contract}}#{{$Name}}",callReturn.getException())),null);
                             return;
                         }
                     }
 
                     {{if notVoid .Return}}
-                    {{unmarshalReturn .Return "callReturn" 5}}
-                    promise.Notify(null,returnParam);
+{{unmarshalReturn .Return "callReturn" 5}}
+                    Notify(null,returnParam);
                     {{else}}
-                    promise.Notify(null,null);
+                    Notify(null,null);
                     {{end}}
                 }catch(Exception e1) {
-                    promise.Notify(e1,null);
+                    Notify(e1,null);
                 }
             }
-        });
+        };
+
+        this.net.send(request,promise);
+
+        return promise;
     }
     {{end}}
 }
