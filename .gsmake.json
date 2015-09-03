@@ -24,14 +24,8 @@
         },
 
         "resource":{
-            "prev":"gorpc",
-            "domain":"all",
-            "description" : "compile gslang source codes"
-        },
-
-        "resource":{
-            "prev":"jvmrpc",
-            "domain":"all",
+            "prev":["gorpc","jvmrpc"],
+            "domain":"golang",
             "description" : "compile gslang source codes"
         }
     }
