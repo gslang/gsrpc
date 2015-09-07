@@ -69,3 +69,7 @@ table WhoAmI {
 @Exception
 table InvalidContract {
 }
+
+@Exception
+table RemoteException {
+}
