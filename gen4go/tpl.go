@@ -30,7 +30,7 @@ func (val {{$Enum}}) String() string {
     switch val {
         {{range .Constants}}
         case {{.Value}}:
-            return "enum({{$Enum}}.{{title .Name}})"
+            return "{{$Enum}}.{{title .Name}}"
         {{end}}
     }
     return fmt.Sprintf("enum(Unknown(%d))",val)
