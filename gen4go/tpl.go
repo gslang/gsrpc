@@ -16,12 +16,12 @@ const (
 
 //Write{{$Enum}} write enum to output stream
 func Write{{$Enum}}(writer gorpc.Writer, val {{$Enum}}) error{
-    return {{if enumSize . | eq 4}} gorpc.WriteUint32(writer,uint32(val)) {{else}} gorpc.WriteByte(writer,byte(val)) {{end}}
+    return {{if enumSize . | eq 4}} gorpc.WriteUInt32(writer,uint32(val)) {{else}} gorpc.WriteByte(writer,byte(val)) {{end}}
 }
 
 //Read{{$Enum}} write enum to output stream
 func Read{{$Enum}}(reader gorpc.Reader)({{$Enum}}, error){
-    val,err := {{if enumSize . | eq 4}} gorpc.ReadUint32(reader) {{else}} gorpc.ReadByte(reader) {{end}}
+    val,err := {{if enumSize . | eq 4}} gorpc.ReadUInt32(reader) {{else}} gorpc.ReadByte(reader) {{end}}
     return {{$Enum}}(val),err
 }
 
