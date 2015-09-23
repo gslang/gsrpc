@@ -23,6 +23,11 @@
             "description" : "generate gsrpc jvm stub codes"
         },
 
+        "objrpc":{
+            "domain":"objc",
+            "description" : "generate gsrpc objc stub codes"
+        },
+
         "resource":{
             "prev":["gorpc","jvmrpc"],
             "domain":"golang",

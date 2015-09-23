@@ -5,6 +5,8 @@ using gslang.Exception;
 
 @Lang(Name:"golang",Package:"github.com/gsrpc/gorpc")
 
+@Lang(Name:"objc",Package:"GS")
+
 // RPC message codes
 enum Code {
     Heartbeat,WhoAmI,Request,Response,Accept,Reject,Tunnel

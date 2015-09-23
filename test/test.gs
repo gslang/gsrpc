@@ -4,6 +4,9 @@ using gslang.annotations.Usage;
 using gslang.annotations.Target;
 using gslang.Exception;
 using gslang.Flag;
+using gslang.Lang;
+
+@Lang(Name:"objc",Package:"GSTest")
 
 
 enum TimeUnit{
@@ -40,7 +43,7 @@ table Timeout {
 // remote exception
 @Exception
 table RemoteException {
-    
+
 }
 
 table KV {

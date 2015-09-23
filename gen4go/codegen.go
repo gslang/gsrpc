@@ -499,9 +499,9 @@ func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Scri
 	codegen.packageName = script.Package
 	codegen.scriptPath = strings.Replace(codegen.packageName, ".", "/", -1)
 
-	lang, ok := gslang.FindAnnotation(script, "gslang.Lang")
+	langs := gslang.FindAnnotations(script.Module, "gslang.Lang")
 
-	if ok {
+	for _, lang := range langs {
 
 		langName, ok := lang.Args.NamedArg("Name")
 
