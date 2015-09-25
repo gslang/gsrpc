@@ -41,7 +41,7 @@ var readMapping = map[lexer.TokenType]string{
 	lexer.KeyInt32:   "reader ReadInt32",
 	lexer.KeyUInt32:  "reader ReadUInt32",
 	lexer.KeyInt64:   "reader ReadInt64",
-	lexer.KeyUInt64:  "reader ReadUInt6",
+	lexer.KeyUInt64:  "reader ReadUInt64",
 	lexer.KeyFloat32: "reader ReadFloat32",
 	lexer.KeyFloat64: "reader ReadFloat64",
 	lexer.KeyBool:    "reader ReadBool",
@@ -56,7 +56,7 @@ var writeMapping = map[lexer.TokenType]string{
 	lexer.KeyInt32:   "writer WriteInt32",
 	lexer.KeyUInt32:  "writer WriteUInt32",
 	lexer.KeyInt64:   "writer WriteInt64",
-	lexer.KeyUInt64:  "writer WriteUInt6",
+	lexer.KeyUInt64:  "writer WriteUInt64",
 	lexer.KeyFloat32: "writer WriteFloat32",
 	lexer.KeyFloat64: "writer WriteFloat64",
 	lexer.KeyBool:    "writer WriteBool",
@@ -869,7 +869,7 @@ func (codegen *_CodeGen) EndScript(compiler *gslang.Compiler) {
 
 	path := filepath.Join(strings.Replace(codegen.script.Package, ".", "/", -1), filepath.Base(codegen.script.Name())+".h")
 
-	stream.WriteString(fmt.Sprintf("#import \"%s\"\n\n", path))
+	stream.WriteString(fmt.Sprintf("#import <%s>\n\n", path))
 
 	stream.WriteString("#import <com/gsrpc/gsrpc.gs.h>\n\n")
 
