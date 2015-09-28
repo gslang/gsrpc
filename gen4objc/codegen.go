@@ -230,19 +230,27 @@ func (codegen *_CodeGen) title(typeDecl ast.TypeDecl) string {
 }
 
 func (codegen *_CodeGen) typePrefix(typeDecl ast.TypeDecl) string {
-	langs := gslang.FindAnnotations(typeDecl.Module(), "gslang.Lang")
+	langs := gslang.FindAnnotations(typeDecl.Module(), "gslang.Package")
+
+	compiler := codegen.compiler
 
 	for _, lang := range langs {
 
-		langName, ok := lang.Args.NamedArg("Name")
+		langName, ok := lang.Args.NamedArg("Lang")
 
-		if ok {
-			if codegen.compiler.Eval().EvalString(langName) == "objc" {
-				packageName, ok := lang.Args.NamedArg("Package")
+		if ok && compiler.Eval().EvalString(langName) == "objc" {
+
+			packageName, ok := lang.Args.NamedArg("Name")
+
+			if ok && compiler.Eval().EvalString(packageName) == codegen.script.Package {
+
+				redirect, ok := lang.Args.NamedArg("Redirect")
+
 				if ok {
-					return codegen.compiler.Eval().EvalString(packageName)
+					return compiler.Eval().EvalString(redirect)
 				}
 			}
+
 		}
 	}
 

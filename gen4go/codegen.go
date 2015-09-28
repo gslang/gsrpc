@@ -499,20 +499,26 @@ func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Scri
 	codegen.packageName = script.Package
 	codegen.scriptPath = strings.Replace(codegen.packageName, ".", "/", -1)
 
-	langs := gslang.FindAnnotations(script.Module, "gslang.Lang")
+	langs := gslang.FindAnnotations(script.Module, "gslang.Package")
 
 	for _, lang := range langs {
 
-		langName, ok := lang.Args.NamedArg("Name")
+		langName, ok := lang.Args.NamedArg("Lang")
 
-		if ok {
-			if compiler.Eval().EvalString(langName) == "golang" {
-				packageName, ok := lang.Args.NamedArg("Package")
+		if ok && compiler.Eval().EvalString(langName) == "golang" {
+
+			packageName, ok := lang.Args.NamedArg("Name")
+
+			if ok && compiler.Eval().EvalString(packageName) == script.Package {
+
+				redirect, ok := lang.Args.NamedArg("Redirect")
+
 				if ok {
-					codegen.packageName = compiler.Eval().EvalString(packageName)
+					codegen.packageName = compiler.Eval().EvalString(redirect)
 					codegen.scriptPath = codegen.packageName
 				}
 			}
+
 		}
 	}
 

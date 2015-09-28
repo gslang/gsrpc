@@ -1,11 +1,11 @@
 package com.gsrpc;
 
-using gslang.Lang;
+using gslang.Package;
 using gslang.Exception;
 
-@Lang(Name:"golang",Package:"github.com/gsrpc/gorpc")
+@Package(Lang:"golang",Name:"com.gsrpc",Redirect:"github.com/gsrpc/gorpc")
 
-@Lang(Name:"objc",Package:"GS")
+@Package(Lang:"objc",Name:"com.gsrpc",Redirect:"GS")
 
 // RPC message codes
 enum Code {
