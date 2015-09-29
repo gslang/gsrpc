@@ -61,6 +61,7 @@ table Device {
     ArchType    Arch;           // device arch type
     OSType      OS;             // device os type
     string      OSVersion;      // device os reversion
+    string      AppKey;         // app key string
 }
 
 table WhoAmI {
