@@ -202,14 +202,13 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
     {
 {{range .Params}}{{unmarshalParam . "call"}}{{end}}
         {{methodCall .}}
-        {{if notVoid .Return}}
         GSResponse * callreturn  = [GSResponse init];
-        {{marshalReturn .Return}}
         callreturn.ID = call.ID;
         callreturn.Service = call.Service;
-        return callreturn;
+        {{if notVoid .Return}}
+{{marshalReturn .Return}}
         {{end}}
-        break;
+        return callreturn;
     }
     {{end}}
     }

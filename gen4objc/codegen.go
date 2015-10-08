@@ -404,7 +404,7 @@ func (codegen *_CodeGen) marshal(varname string, typeDecl ast.Type, indent int) 
 
 		if seq.Size == -1 {
 
-			stream.WriteString(fmt.Sprintf("[writer WriteUInt16:%s.count];", varname))
+			stream.WriteString(fmt.Sprintf("[writer WriteUInt16:%s.count];\n", varname))
 
 			writeindent(&stream, indent)
 
