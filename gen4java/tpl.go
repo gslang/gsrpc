@@ -167,11 +167,11 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
 
                 } catch(Exception e){
                     {{range .Exceptions}}
-                    if(e instanceof {{typeName .Type}}){
+                    if(e instanceof {{exceptionTypeName .Type}}){
 
                         com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();
 
-                        (({{typeName .Type}})e).Marshal(writer);
+                        (({{exceptionTypeName .Type }})e).Marshal(writer);
 
                         com.gsrpc.Response callReturn = new com.gsrpc.Response();
                         callReturn.setID(call.getID());
@@ -228,7 +228,7 @@ public final class {{$Contract}}RPC {
         request.setParams(params);
         {{end}}
 
-        com.gsrpc.Promise<{{typeName .Return}}> promise = new com.gsrpc.Promise<{{typeName .Return}}>(timeout){
+        com.gsrpc.Promise<{{objTypeName .Return}}> promise = new com.gsrpc.Promise<{{objTypeName .Return}}>(timeout){
             @Override
             public void Return(Exception e,com.gsrpc.Response callReturn){
 
@@ -245,7 +245,7 @@ public final class {{$Contract}}RPC {
                             case {{.ID}}:{
                             com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(callReturn.getContent());
 
-                            {{typeName .Type}} exception = {{defaultVal .Type}};
+                            {{exceptionTypeName .Type}} exception = {{exceptionDefaultVal .Type}};
 
                             {{readType "exception" .Type 4}}
 
@@ -255,7 +255,7 @@ public final class {{$Contract}}RPC {
                         }
                         {{end}}
                         default:
-                            Notify(new com.gsrpc.RemoteException(String.format("catch unknown exception(%d) for {{$Contract}}#{{$Name}}",callReturn.getException())),null);
+                            Notify(new com.gsrpc.RemoteException(),null);
                             return;
                         }
                     }

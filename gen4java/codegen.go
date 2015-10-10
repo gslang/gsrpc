@@ -32,6 +32,22 @@ var builtin = map[lexer.TokenType]string{
 	lexer.KeyVoid:    "Void",
 }
 
+var builtinObj = map[lexer.TokenType]string{
+	lexer.KeySByte:   "Byte",
+	lexer.KeyByte:    "Byte",
+	lexer.KeyInt16:   "Short",
+	lexer.KeyUInt16:  "Short",
+	lexer.KeyInt32:   "Int",
+	lexer.KeyUInt32:  "Int",
+	lexer.KeyInt64:   "Long",
+	lexer.KeyUInt64:  "Long",
+	lexer.KeyFloat32: "Float",
+	lexer.KeyFloat64: "Double",
+	lexer.KeyBool:    "Boolean",
+	lexer.KeyString:  "String",
+	lexer.KeyVoid:    "Void",
+}
+
 var readMapping = map[lexer.TokenType]string{
 	lexer.KeySByte:   "reader.ReadSByte",
 	lexer.KeyByte:    "reader.ReadByte",
@@ -40,7 +56,7 @@ var readMapping = map[lexer.TokenType]string{
 	lexer.KeyInt32:   "reader.ReadInt32",
 	lexer.KeyUInt32:  "reader.ReadUInt32",
 	lexer.KeyInt64:   "reader.ReadInt64",
-	lexer.KeyUInt64:  "reader.ReadUInt6",
+	lexer.KeyUInt64:  "reader.ReadUInt64",
 	lexer.KeyFloat32: "reader.ReadFloat32",
 	lexer.KeyFloat64: "reader.ReadFloat64",
 	lexer.KeyBool:    "reader.ReadBool",
@@ -55,7 +71,7 @@ var writeMapping = map[lexer.TokenType]string{
 	lexer.KeyInt32:   "writer.WriteInt32",
 	lexer.KeyUInt32:  "writer.WriteUInt32",
 	lexer.KeyInt64:   "writer.WriteInt64",
-	lexer.KeyUInt64:  "writer.WriteUInt6",
+	lexer.KeyUInt64:  "writer.WriteUInt64",
 	lexer.KeyFloat32: "writer.WriteFloat32",
 	lexer.KeyFloat64: "writer.WriteFloat64",
 	lexer.KeyBool:    "writer.WriteBool",
@@ -102,33 +118,36 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	}
 
 	funcs := template.FuncMap{
-		"exception":       exception,
-		"title":           strings.Title,
-		"fieldName":       fieldname,
-		"enumFields":      codeGen.enumFields,
-		"enumType":        codeGen.enumType,
-		"enumSize":        codeGen.enumSize,
-		"typeName":        codeGen.typeName,
-		"defaultVal":      codeGen.defaultVal,
-		"builtin":         codeGen.builtin,
-		"readType":        codeGen.readType,
-		"writeType":       codeGen.writeType,
-		"params":          codeGen.params,
-		"returnParam":     codeGen.returnParam,
-		"callArgs":        codeGen.callArgs,
-		"returnArgs":      codeGen.returnArgs,
-		"notVoid":         codeGen.notVoid,
-		"marshalField":    codeGen.marshalfield,
-		"unmarshalField":  codeGen.unmarshalfield,
-		"unmarshalParam":  codeGen.unmarshalParam,
-		"methodcall":      codeGen.methodcall,
-		"marshalParam":    codeGen.marshalParam,
-		"marshalReturn":   codeGen.marshalReturn,
-		"methodRPC":       codeGen.methodRPC,
-		"marshalParams":   codeGen.marshalParams,
-		"callback":        codeGen.callback,
-		"unmarshalReturn": codeGen.unmarshalReturn,
-		"constructor":     codeGen.constructor,
+		"exception":           exception,
+		"title":               strings.Title,
+		"fieldName":           fieldname,
+		"enumFields":          codeGen.enumFields,
+		"enumType":            codeGen.enumType,
+		"enumSize":            codeGen.enumSize,
+		"typeName":            codeGen.typeName,
+		"objTypeName":         codeGen.objTypeName,
+		"exceptionTypeName":   codeGen.exceptionTypeName,
+		"defaultVal":          codeGen.defaultVal,
+		"exceptionDefaultVal": codeGen.exceptionDefaultVal,
+		"builtin":             codeGen.builtin,
+		"readType":            codeGen.readType,
+		"writeType":           codeGen.writeType,
+		"params":              codeGen.params,
+		"returnParam":         codeGen.returnParam,
+		"callArgs":            codeGen.callArgs,
+		"returnArgs":          codeGen.returnArgs,
+		"notVoid":             codeGen.notVoid,
+		"marshalField":        codeGen.marshalfield,
+		"unmarshalField":      codeGen.unmarshalfield,
+		"unmarshalParam":      codeGen.unmarshalParam,
+		"methodcall":          codeGen.methodcall,
+		"marshalParam":        codeGen.marshalParam,
+		"marshalReturn":       codeGen.marshalReturn,
+		"methodRPC":           codeGen.methodRPC,
+		"marshalParams":       codeGen.marshalParams,
+		"callback":            codeGen.callback,
+		"unmarshalReturn":     codeGen.unmarshalReturn,
+		"constructor":         codeGen.constructor,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -196,7 +215,7 @@ func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
 	var buff bytes.Buffer
 
 	if codegen.notVoid(method.Return) {
-		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.typeName(method.Return), strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.objTypeName(method.Return), strings.Title(method.Name())))
 	} else {
 		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", strings.Title(method.Name())))
 	}
@@ -664,6 +683,61 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 	return "unknown"
 }
 
+func (codegen *_CodeGen) objTypeName(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+
+		return builtinObj[builtinType.Type]
+	case *ast.TypeRef:
+		typeRef := typeDecl.(*ast.TypeRef)
+
+		return codegen.typeName(typeRef.Ref)
+
+	case *ast.Enum, *ast.Table:
+		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+
+		if prefix != "" {
+			return prefix + "." + name
+		}
+
+		return name
+
+	case *ast.Seq:
+		seq := typeDecl.(*ast.Seq)
+
+		return fmt.Sprintf("%s[]", codegen.typeName(seq.Component))
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return "unknown"
+}
+
+func (codegen *_CodeGen) exceptionTypeName(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.TypeRef:
+		typeRef := typeDecl.(*ast.TypeRef)
+
+		return codegen.exceptionTypeName(typeRef.Ref)
+
+	case *ast.Table:
+		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+
+		name = exception(name)
+
+		if prefix != "" {
+			return prefix + "." + name
+		}
+
+		return name
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return "unknown"
+}
+
 func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 	switch typeDecl.(type) {
 	case *ast.BuiltinType:
@@ -688,6 +762,31 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 		seq := typeDecl.(*ast.Seq)
 
 		return fmt.Sprintf("%s[]", codegen.typeName(seq.Component))
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return "unknown"
+}
+
+func (codegen *_CodeGen) exceptionDefaultVal(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.TypeRef:
+		typeRef := typeDecl.(*ast.TypeRef)
+
+		return codegen.exceptionDefaultVal(typeRef.Ref)
+
+	case *ast.Table:
+
+		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+
+		name = exception(name)
+
+		if prefix != "" {
+			return "new " + prefix + "." + name + "()"
+		}
+
+		return "new " + name + "()"
 	}
 
 	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
