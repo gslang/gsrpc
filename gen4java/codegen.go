@@ -37,8 +37,8 @@ var builtinObj = map[lexer.TokenType]string{
 	lexer.KeyByte:    "Byte",
 	lexer.KeyInt16:   "Short",
 	lexer.KeyUInt16:  "Short",
-	lexer.KeyInt32:   "Int",
-	lexer.KeyUInt32:  "Int",
+	lexer.KeyInt32:   "Integer",
+	lexer.KeyUInt32:  "Integer",
 	lexer.KeyInt64:   "Long",
 	lexer.KeyUInt64:  "Long",
 	lexer.KeyFloat32: "Float",
@@ -59,7 +59,7 @@ var readMapping = map[lexer.TokenType]string{
 	lexer.KeyUInt64:  "reader.ReadUInt64",
 	lexer.KeyFloat32: "reader.ReadFloat32",
 	lexer.KeyFloat64: "reader.ReadFloat64",
-	lexer.KeyBool:    "reader.ReadBool",
+	lexer.KeyBool:    "reader.ReadBoolean",
 	lexer.KeyString:  "reader.ReadString",
 }
 
@@ -74,7 +74,7 @@ var writeMapping = map[lexer.TokenType]string{
 	lexer.KeyUInt64:  "writer.WriteUInt64",
 	lexer.KeyFloat32: "writer.WriteFloat32",
 	lexer.KeyFloat64: "writer.WriteFloat64",
-	lexer.KeyBool:    "writer.WriteBool",
+	lexer.KeyBool:    "writer.WriteBoolean",
 	lexer.KeyString:  "writer.WriteString",
 }
 
@@ -750,13 +750,13 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 		return codegen.typeName(typeRef.Ref)
 
 	case *ast.Enum, *ast.Table:
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		//
+		// if prefix != "" {
+		// 	return prefix + "." + name
+		// }
 
-		if prefix != "" {
-			return prefix + "." + name
-		}
-
-		return name
+		return typeDecl.FullName()
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
@@ -809,23 +809,23 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 
 		enum := typeDecl.(*ast.Enum)
 
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		//
+		// if prefix != "" {
+		// 	return prefix + "." + name + "." + enum.Constants[0].Name()
+		// }
 
-		if prefix != "" {
-			return prefix + "." + name + "." + enum.Constants[0].Name()
-		}
-
-		return name + "." + enum.Constants[0].Name()
+		return typeDecl.FullName() + "." + enum.Constants[0].Name()
 
 	case *ast.Table:
 
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		//
+		// if prefix != "" {
+		// 	return "new " + prefix + "." + name + "()"
+		// }
 
-		if prefix != "" {
-			return "new " + prefix + "." + name + "()"
-		}
-
-		return "new " + name + "()"
+		return "new " + typeDecl.FullName() + "()"
 
 	case *ast.Seq:
 		return fmt.Sprintf("new %s", codegen.arrayDefaultVal(typeDecl))
@@ -872,6 +872,8 @@ func (codegen *_CodeGen) writeJavaFile(name string, expr ast.Expr, content []byt
 
 		buff.WriteString(fmt.Sprintf("%s;\n\n", i))
 
+		codegen.I(i)
+
 	}
 
 	buff.Write(content)
@@ -914,7 +916,15 @@ func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {
 
 	nodes := strings.Split(using.Name(), ".")
 
-	codegen.imports[nodes[len(nodes)-2]+"."] = strings.Join(nodes[:len(nodes)-1], ".")
+	_, ok := gslang.FindAnnotation(using.Ref, "gslang.Exception")
+
+	name := using.Name()
+
+	if ok {
+		name = strings.Join(nodes[:len(nodes)-1], ".") + "." + exception(nodes[len(nodes)-1])
+	}
+
+	codegen.imports[nodes[len(nodes)-2]+"."] = "import " + name
 }
 
 func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) {
