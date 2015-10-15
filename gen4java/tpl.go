@@ -25,13 +25,13 @@ public enum {{title .Name}} {
     public {{enumType .}} getValue() {
         return this.value;
     }
-    public void Marshal(Writer writer) throws Exception
+    public void marshal(Writer writer) throws Exception
     {
-        {{if enumSize . | eq 4}} writer.WriteUInt32(getValue()); {{else}} writer.WriteByte(getValue()); {{end}}
+        {{if enumSize . | eq 4}} writer.writeUInt32(getValue()); {{else}} writer.writeByte(getValue()); {{end}}
     }
-    public static {{title .Name}} Unmarshal(Reader reader) throws Exception
+    public static {{title .Name}} unmarshal(Reader reader) throws Exception
     {
-        {{enumType .}} code =  {{if enumSize . | eq 4}} reader.ReadUInt32(); {{else}} reader.ReadByte(); {{end}}
+        {{enumType .}} code =  {{if enumSize . | eq 4}} reader.readUInt32(); {{else}} reader.readByte(); {{end}}
         switch(code)
         {
         {{range .Constants}}
@@ -67,13 +67,13 @@ public class {{$Struct}} extends Exception
         this.{{fieldName .Name}} = arg;
     }
 {{end}}
-    public void Marshal(Writer writer)  throws Exception
+    public void marshal(Writer writer)  throws Exception
     {
 {{range .Fields}}
         {{marshalField .}}
 {{end}}
     }
-    public void Unmarshal(Reader reader) throws Exception
+    public void unmarshal(Reader reader) throws Exception
     {
 {{range .Fields}}
         {{unmarshalField .}}
@@ -103,13 +103,13 @@ public class {{$Struct}}
         this.{{fieldName .Name}} = arg;
     }
 {{end}}
-    public void Marshal(Writer writer)  throws Exception
+    public void marshal(Writer writer)  throws Exception
     {
 {{range .Fields}}
         {{marshalField .}}
 {{end}}
     }
-    public void Unmarshal(Reader reader) throws Exception
+    public void unmarshal(Reader reader) throws Exception
     {
 {{range .Fields}}
         {{unmarshalField .}}
@@ -123,7 +123,7 @@ public class {{$Struct}}
 
 public interface {{$Contract}} {
 {{range .Methods}}
-    {{returnParam .Return}} {{title .Name}} {{params .Params}} throws Exception;
+    {{returnParam .Return}} {{methodName .Name}} {{params .Params}} throws Exception;
 {{end}}
 }
 
@@ -149,8 +149,9 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
         {{range .Methods}}
         case {{.ID}}: {
 {{range .Params}}{{unmarshalParam . "call" 4}}{{end}}
-
+                {{if .Exceptions}}
                 try{
+                {{end}}
                     {{methodcall .}}
 
                     com.gsrpc.Response callReturn = new com.gsrpc.Response();
@@ -165,24 +166,20 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
 
                     return callReturn;
 
-                } catch(Exception e){
-                    {{range .Exceptions}}
-                    if(e instanceof {{exceptionTypeName .Type}}){
+                {{if .Exceptions}}}{{end}}{{range .Exceptions}} catch({{exceptionTypeName .Type}} e) {
 
-                        com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();
+                    com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();
 
-                        (({{exceptionTypeName .Type }})e).Marshal(writer);
+                    e.marshal(writer);
 
-                        com.gsrpc.Response callReturn = new com.gsrpc.Response();
-                        callReturn.setID(call.getID());
-                        callReturn.setService(call.getService());
-                        callReturn.setException((byte){{.ID}});
-                        callReturn.setContent(writer.Content());
+                    com.gsrpc.Response callReturn = new com.gsrpc.Response();
+                    callReturn.setID(call.getID());
+                    callReturn.setService(call.getService());
+                    callReturn.setException((byte){{.ID}});
+                    callReturn.setContent(writer.Content());
 
-                        return callReturn;
-                    }
-                    {{end}}
-                }
+                    return callReturn;
+                }{{end}}
             }
         {{end}}
         }

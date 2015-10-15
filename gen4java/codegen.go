@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -49,33 +50,33 @@ var builtinObj = map[lexer.TokenType]string{
 }
 
 var readMapping = map[lexer.TokenType]string{
-	lexer.KeySByte:   "reader.ReadSByte",
-	lexer.KeyByte:    "reader.ReadByte",
-	lexer.KeyInt16:   "reader.ReadInt16",
-	lexer.KeyUInt16:  "reader.ReadUInt16",
-	lexer.KeyInt32:   "reader.ReadInt32",
-	lexer.KeyUInt32:  "reader.ReadUInt32",
-	lexer.KeyInt64:   "reader.ReadInt64",
-	lexer.KeyUInt64:  "reader.ReadUInt64",
-	lexer.KeyFloat32: "reader.ReadFloat32",
-	lexer.KeyFloat64: "reader.ReadFloat64",
-	lexer.KeyBool:    "reader.ReadBoolean",
-	lexer.KeyString:  "reader.ReadString",
+	lexer.KeySByte:   "reader.readSByte",
+	lexer.KeyByte:    "reader.readByte",
+	lexer.KeyInt16:   "reader.readInt16",
+	lexer.KeyUInt16:  "reader.readUInt16",
+	lexer.KeyInt32:   "reader.readInt32",
+	lexer.KeyUInt32:  "reader.readUInt32",
+	lexer.KeyInt64:   "reader.readInt64",
+	lexer.KeyUInt64:  "reader.readUInt64",
+	lexer.KeyFloat32: "reader.readFloat32",
+	lexer.KeyFloat64: "reader.readFloat64",
+	lexer.KeyBool:    "reader.readBoolean",
+	lexer.KeyString:  "reader.readString",
 }
 
 var writeMapping = map[lexer.TokenType]string{
-	lexer.KeySByte:   "writer.WriteSByte",
-	lexer.KeyByte:    "writer.WriteByte",
-	lexer.KeyInt16:   "writer.WriteInt16",
-	lexer.KeyUInt16:  "writer.WriteUInt16",
-	lexer.KeyInt32:   "writer.WriteInt32",
-	lexer.KeyUInt32:  "writer.WriteUInt32",
-	lexer.KeyInt64:   "writer.WriteInt64",
-	lexer.KeyUInt64:  "writer.WriteUInt64",
-	lexer.KeyFloat32: "writer.WriteFloat32",
-	lexer.KeyFloat64: "writer.WriteFloat64",
-	lexer.KeyBool:    "writer.WriteBoolean",
-	lexer.KeyString:  "writer.WriteString",
+	lexer.KeySByte:   "writer.writeSByte",
+	lexer.KeyByte:    "writer.writeByte",
+	lexer.KeyInt16:   "writer.writeInt16",
+	lexer.KeyUInt16:  "writer.writeUInt16",
+	lexer.KeyInt32:   "writer.writeInt32",
+	lexer.KeyUInt32:  "writer.writeUInt32",
+	lexer.KeyInt64:   "writer.writeInt64",
+	lexer.KeyUInt64:  "writer.writeUInt64",
+	lexer.KeyFloat32: "writer.writeFloat32",
+	lexer.KeyFloat64: "writer.writeFloat64",
+	lexer.KeyBool:    "writer.writeBoolean",
+	lexer.KeyString:  "writer.writeString",
 }
 
 var defaultval = map[lexer.TokenType]string{
@@ -107,19 +108,31 @@ type _CodeGen struct {
 	imports      map[string]string  // imports
 	packageName  string             // package name
 	scriptPath   string             // script path
+	skips        []*regexp.Regexp   // skip lists
 }
 
 // NewCodeGen .
-func NewCodeGen(rootpath string) (gslang.Visitor, error) {
+func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 
 	codeGen := &_CodeGen{
 		Log:      gslogger.Get("gen4go"),
 		rootpath: rootpath,
 	}
 
+	for _, skip := range skips {
+		exp, err := regexp.Compile(skip)
+
+		if err != nil {
+			return nil, gserrors.Newf(err, "invalid skip regex string :%s", skip)
+		}
+
+		codeGen.skips = append(codeGen.skips, exp)
+	}
+
 	funcs := template.FuncMap{
 		"exception":           exception,
 		"title":               strings.Title,
+		"methodName":          methodName,
 		"fieldName":           fieldname,
 		"enumFields":          codeGen.enumFields,
 		"enumType":            codeGen.enumType,
@@ -169,6 +182,10 @@ func exception(name string) string {
 	return strings.Title(name) + "Exception"
 }
 
+func methodName(name string) string {
+	return strings.ToLower(name[:1]) + name[1:]
+}
+
 func (codegen *_CodeGen) callback(method *ast.Method) string {
 
 	var buff bytes.Buffer
@@ -215,9 +232,9 @@ func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
 	var buff bytes.Buffer
 
 	if codegen.notVoid(method.Return) {
-		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.objTypeName(method.Return), strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.objTypeName(method.Return), methodName(method.Name())))
 	} else {
-		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", methodName(method.Name())))
 	}
 
 	for _, v := range method.Params {
@@ -356,9 +373,9 @@ func (codegen *_CodeGen) methodcall(method *ast.Method) string {
 	var buff bytes.Buffer
 
 	if !codegen.notVoid(method.Return) {
-		buff.WriteString(fmt.Sprintf("this.service.%s(", strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("this.service.%s(", methodName(method.Name())))
 	} else {
-		buff.WriteString(fmt.Sprintf("%s ret = this.service.%s(", codegen.typeName(method.Return), strings.Title(method.Name())))
+		buff.WriteString(fmt.Sprintf("%s ret = this.service.%s(", codegen.typeName(method.Return), methodName(method.Name())))
 	}
 
 	for i := range method.Params {
@@ -490,10 +507,6 @@ func (codegen *_CodeGen) typeRef(pacakgeName, fullname string) (prefix string, n
 
 	prefix = nodes[len(nodes)-2]
 
-	if strings.Join(nodes[:len(nodes)-1], ".") == "com.gsrpc" {
-		prefix = "gorpc"
-	}
-
 	return prefix, strings.Title(nodes[len(nodes)-1])
 }
 
@@ -508,7 +521,7 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 		return codegen.writeType(valname, typeRef.Ref, indent)
 
 	case *ast.Enum, *ast.Table:
-		return fmt.Sprintf("%s.Marshal(writer);", valname)
+		return fmt.Sprintf("%s.marshal(writer);", valname)
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
@@ -525,13 +538,13 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 
 			if isbytes {
 
-				return fmt.Sprintf("writer.WriteBytes(%s);", valname)
+				return fmt.Sprintf("writer.writeBytes(%s);", valname)
 
 			}
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n\n", valname))
+			stream.WriteString(fmt.Sprintf("writer.writeUInt16((short)%s.length);\n\n", valname))
 
 			writeindent(&stream, indent-1)
 
@@ -552,12 +565,12 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 		}
 
 		if isbytes {
-			return fmt.Sprintf("writer.WriteArrayBytes(%s);", valname)
+			return fmt.Sprintf("writer.writeArrayBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
 
-		stream.WriteString(fmt.Sprintf("writer.WriteUInt16((short)%s.length);\n\n", valname))
+		stream.WriteString(fmt.Sprintf("writer.writeUInt16((short)%s.length);\n\n", valname))
 
 		writeindent(&stream, indent-1)
 
@@ -593,10 +606,10 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		return codegen.readType(valname, typeRef.Ref, indent)
 
 	case *ast.Enum:
-		return fmt.Sprintf("%s = %s.Unmarshal(reader);", valname, codegen.typeName(typeDecl))
+		return fmt.Sprintf("%s = %s.unmarshal(reader);", valname, codegen.typeName(typeDecl))
 
 	case *ast.Table:
-		return fmt.Sprintf("%s.Unmarshal(reader);", valname)
+		return fmt.Sprintf("%s.unmarshal(reader);", valname)
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
@@ -612,12 +625,12 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		if seq.Size == -1 {
 
 			if isbytes {
-				return fmt.Sprintf("%s = reader.ReadBytes();", valname)
+				return fmt.Sprintf("%s = reader.readBytes();", valname)
 			}
 
 			var stream bytes.Buffer
 
-			stream.WriteString(fmt.Sprintf("int max%d = reader.ReadUInt16();\n\n", indent))
+			stream.WriteString(fmt.Sprintf("int max%d = reader.readUInt16();\n\n", indent))
 
 			writeindent(&stream, indent-1)
 
@@ -650,7 +663,7 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		}
 
 		if isbytes {
-			return fmt.Sprintf("reader.ReadArrayBytes(%s);", valname)
+			return fmt.Sprintf("reader.readArrayBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
@@ -750,13 +763,9 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 		return codegen.typeName(typeRef.Ref)
 
 	case *ast.Enum, *ast.Table:
-		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
-		//
-		// if prefix != "" {
-		// 	return prefix + "." + name
-		// }
+		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 
-		return typeDecl.FullName()
+		return name
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
@@ -778,13 +787,9 @@ func (codegen *_CodeGen) exceptionDefaultVal(typeDecl ast.Type) string {
 
 	case *ast.Table:
 
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 
 		name = exception(name)
-
-		if prefix != "" {
-			return "new " + prefix + "." + name + "()"
-		}
 
 		return "new " + name + "()"
 	}
@@ -809,23 +814,23 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 
 		enum := typeDecl.(*ast.Enum)
 
-		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 		//
 		// if prefix != "" {
 		// 	return prefix + "." + name + "." + enum.Constants[0].Name()
 		// }
 
-		return typeDecl.FullName() + "." + enum.Constants[0].Name()
+		return name + "." + enum.Constants[0].Name()
 
 	case *ast.Table:
 
-		// prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
+		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 		//
 		// if prefix != "" {
 		// 	return "new " + prefix + "." + name + "()"
 		// }
 
-		return "new " + typeDecl.FullName() + "()"
+		return "new " + name + "()"
 
 	case *ast.Seq:
 		return fmt.Sprintf("new %s", codegen.arrayDefaultVal(typeDecl))
@@ -872,8 +877,6 @@ func (codegen *_CodeGen) writeJavaFile(name string, expr ast.Expr, content []byt
 
 		buff.WriteString(fmt.Sprintf("%s;\n\n", i))
 
-		codegen.I(i)
-
 	}
 
 	buff.Write(content)
@@ -894,6 +897,16 @@ func (codegen *_CodeGen) writeJavaFile(name string, expr ast.Expr, content []byt
 }
 
 func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) bool {
+
+	scriptPath := filepath.ToSlash(filepath.Clean(script.Name()))
+
+	for _, skip := range codegen.skips {
+
+		if skip.MatchString(scriptPath) {
+
+			return false
+		}
+	}
 
 	if strings.HasPrefix(script.Package, "gslang.") {
 		return false

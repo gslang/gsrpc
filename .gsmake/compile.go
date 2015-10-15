@@ -11,6 +11,12 @@ import (
 	"github.com/gsrpc/gslang"
 )
 
+// RPCGenConfig .
+type RPCGenConfig struct {
+	Output string   // output path
+	Skips  []string // skip list
+}
+
 func getFilePath(runner *gsmake.Runner, rootDir string, orignal string) ([]string, error) {
 
 	var path string

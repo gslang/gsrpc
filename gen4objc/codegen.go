@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -96,15 +97,26 @@ type _CodeGen struct {
 	header       bytes.Buffer       //header file writer buffer
 	source       bytes.Buffer       //header file writer buffer
 	compiler     *gslang.Compiler   // compilers
+	skips        []*regexp.Regexp   // skip lists
 }
 
 // NewCodeGen .
-func NewCodeGen(rootpath string) (gslang.Visitor, error) {
+func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 
 	codeGen := &_CodeGen{
 		Log:      gslogger.Get("gen4go"),
 		rootpath: rootpath,
 		prefix:   make(map[string]string),
+	}
+
+	for _, skip := range skips {
+		exp, err := regexp.Compile(skip)
+
+		if err != nil {
+			return nil, gserrors.Newf(err, "invalid skip regex string :%s", skip)
+		}
+
+		codeGen.skips = append(codeGen.skips, exp)
 	}
 
 	funcs := template.FuncMap{
@@ -747,6 +759,15 @@ func (codegen *_CodeGen) marshalParams(params []*ast.Param) string {
 func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) bool {
 
 	codegen.compiler = compiler
+
+	scriptPath := filepath.ToSlash(filepath.Clean(script.Name()))
+
+	for _, skip := range codegen.skips {
+
+		if skip.MatchString(scriptPath) {
+			return false
+		}
+	}
 
 	if strings.HasPrefix(script.Package, "gslang") {
 		return false
