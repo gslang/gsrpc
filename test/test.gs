@@ -4,9 +4,9 @@ using gslang.annotations.Usage;
 using gslang.annotations.Target;
 using gslang.Exception;
 using gslang.Flag;
-using gslang.Lang;
+using gslang.Package;
 
-@Lang(Name:"objc",Package:"GSTest")
+@Package(Lang:"objc",Name:"com.gsrpc",Redirect:"GSTest")
 
 
 enum TimeUnit{

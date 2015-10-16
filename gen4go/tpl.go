@@ -64,11 +64,30 @@ func New{{$Table}}() *{{$Table}} {
 //Read{{$Table}} read {{$Table}} from input stream -- generate by gsc
 func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
     target = New{{$Table}}()
+
+    {{if .Fields}}
+
+    var __fields byte
+
+    __fields,err = reader.ReadByte()
+
+    if err != nil {
+        return
+    }
+    {{else}}
+    _,err = reader.ReadByte()
+    {{end}}
+
     {{range .Fields}}
     target.{{title .Name}},err = {{readType .Type}}(reader)
     if err != nil {
         return
     }
+
+    if __fields == 0 {
+        return
+    }
+
     {{end}}
     return
 }
@@ -76,6 +95,13 @@ func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
 
 //Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
 func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
+
+    err = writer.WriteByte(byte({{len .Fields}}))
+
+    if err != nil {
+        return
+    }
+
     {{range .Fields}}
     err = {{writeType .Type}}(writer,val.{{title .Name}})
     if err != nil {
@@ -108,11 +134,32 @@ func New{{$Table}}() *{{$Table}} {
 //Read{{$Table}} read {{$Table}} from input stream -- generate by gsc
 func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
     target = New{{$Table}}()
+
+    {{if .Fields}}
+
+    var __fields byte
+
+    __fields,err = reader.ReadByte()
+
+    if err != nil {
+        return
+    }
+    {{else}}
+    _,err = reader.ReadByte()
+    {{end}}
+
     {{range .Fields}}
     target.{{title .Name}},err = {{readType .Type}}(reader)
     if err != nil {
         return
     }
+
+    __fields --
+
+    if __fields == 0 {
+        return
+    }
+
     {{end}}
     return
 }
@@ -120,6 +167,13 @@ func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
 
 //Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
 func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
+
+    err = writer.WriteByte(byte({{len .Fields}}))
+
+    if err != nil {
+        return
+    }
+
     {{range .Fields}}
     err = {{writeType .Type}}(writer,val.{{title .Name}})
     if err != nil {

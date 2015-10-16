@@ -81,13 +81,22 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
     return self;
 }
 - (void) marshal:(id<GSWriter>) writer {
+    [writer WriteByte :(UInt8){{len .Fields}}];
 {{range .Fields}}
 {{marshalField .}}
 {{end}}
 }
 - (void) unmarshal:(id<GSReader>) reader {
+{{if .Fields}}
+    UInt8 __fields = [reader ReadByte];
+{{else}}
+    [reader ReadByte];
+{{end}}
 {{range .Fields}}
 {{unmarshalField .}}
+    if(-- __fields == 0) {
+        return;
+    }
 {{end}}
 }
 
@@ -126,13 +135,22 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
     return self;
 }
 - (void) marshal:(id<GSWriter>) writer {
+    [writer WriteByte :(UInt8){{len .Fields}}];
 {{range .Fields}}
 {{marshalField .}}
 {{end}}
 }
 - (void) unmarshal:(id<GSReader>) reader {
+{{if .Fields}}
+    UInt8 __fields = [reader ReadByte];
+{{else}}
+    [reader ReadByte];
+{{end}}
 {{range .Fields}}
 {{unmarshalField .}}
+    if(-- __fields == 0) {
+        return;
+    }
 {{end}}
 }
 

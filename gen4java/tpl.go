@@ -69,14 +69,19 @@ public class {{$Struct}} extends Exception
 {{end}}
     public void marshal(Writer writer)  throws Exception
     {
+        writer.writeByte((byte){{len .Fields}});
 {{range .Fields}}
         {{marshalField .}}
 {{end}}
     }
     public void unmarshal(Reader reader) throws Exception
     {
+        byte __fields = reader.readByte();
 {{range .Fields}}
         {{unmarshalField .}}
+        if(-- __fields == 0) {
+            return;
+        }
 {{end}}
     }
 }
@@ -105,14 +110,19 @@ public class {{$Struct}}
 {{end}}
     public void marshal(Writer writer)  throws Exception
     {
+        writer.writeByte((byte){{len .Fields}});
 {{range .Fields}}
         {{marshalField .}}
 {{end}}
     }
     public void unmarshal(Reader reader) throws Exception
     {
+        byte __fields = reader.readByte();
 {{range .Fields}}
         {{unmarshalField .}}
+        if(-- __fields == 0) {
+            return;
+        }
 {{end}}
     }
 }
