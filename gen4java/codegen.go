@@ -161,6 +161,7 @@ func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 		"callback":            codeGen.callback,
 		"unmarshalReturn":     codeGen.unmarshalReturn,
 		"constructor":         codeGen.constructor,
+		"tagValue":            codeGen.tagValue,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -184,6 +185,55 @@ func exception(name string) string {
 
 func methodName(name string) string {
 	return strings.ToLower(name[:1]) + name[1:]
+}
+
+func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+
+		switch builtinType.Type {
+		case lexer.KeySByte, lexer.KeyByte, lexer.KeyBool:
+			return "com.gsrpc.Tag.I8.getValue()"
+		case lexer.KeyInt16, lexer.KeyUInt16:
+			return "com.gsrpc.Tag.I16.getValue()"
+		case lexer.KeyInt32, lexer.KeyUInt32, lexer.KeyFloat32:
+			return "com.gsrpc.Tag.I32.getValue()"
+		case lexer.KeyInt64, lexer.KeyUInt64, lexer.KeyFloat64:
+			return "com.gsrpc.Tag.I64.getValue()"
+		case lexer.KeyString:
+			return "com.gsrpc.Tag.String.getValue()"
+		}
+
+	case *ast.TypeRef:
+		return codegen.tagValue(typeDecl.(*ast.TypeRef).Ref)
+	case *ast.Enum:
+
+		if codegen.enumSize(typeDecl) == 4 {
+			return "com.gsrpc.Tag.I32.getValue()"
+		}
+
+		return "com.gsrpc.Tag.I8.getValue()"
+
+	case *ast.Table:
+		return "com.gsrpc.Tag.Table.getValue()"
+	case *ast.Seq:
+
+		seq := typeDecl.(*ast.Seq)
+
+		component := codegen.tagValue(seq.Component)
+
+		if component == "com.gsrpc.Tag.List.getValue()" {
+			start, _ := gslang.Pos(typeDecl)
+			gserrors.Panicf(nil, "list component %v can't be a list :%v", seq.Component, start)
+		}
+
+		return fmt.Sprintf("((%s << 4)|com.gsrpc.Tag.List.getValue())", component)
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return ""
 }
 
 func (codegen *_CodeGen) callback(method *ast.Method) string {
@@ -565,7 +615,7 @@ func (codegen *_CodeGen) writeType(valname string, typeDecl ast.Type, indent int
 		}
 
 		if isbytes {
-			return fmt.Sprintf("writer.writeArrayBytes(%s);", valname)
+			return fmt.Sprintf("writer.writeBytes(%s);", valname)
 		}
 
 		var stream bytes.Buffer
@@ -663,7 +713,7 @@ func (codegen *_CodeGen) readType(valname string, typeDecl ast.Type, indent int)
 		}
 
 		if isbytes {
-			return fmt.Sprintf("reader.readArrayBytes(%s);", valname)
+			return fmt.Sprintf("%s = reader.readBytes();", valname)
 		}
 
 		var stream bytes.Buffer

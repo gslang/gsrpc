@@ -2,6 +2,7 @@ package com.gsrpc;
 
 using gslang.Package;
 using gslang.Exception;
+using gslang.Flag;
 
 @Package(Lang:"golang",Name:"com.gsrpc",Redirect:"github.com/gsrpc/gorpc")
 
@@ -14,6 +15,11 @@ enum Code {
 
 enum State{
     Disconnect,Connecting,Connected,Disconnecting,Closed
+}
+
+@Flag
+enum Tag{
+    I8(0),I16(1),I32(2),I64(3),List(4),Table(5),String(6),Skip(7)
 }
 
 // RPC message
@@ -71,6 +77,10 @@ table WhoAmI {
 
 @Exception
 table InvalidContract {
+}
+
+@Exception
+table UnmarshalException {
 }
 
 @Exception

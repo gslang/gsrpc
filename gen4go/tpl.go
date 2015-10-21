@@ -65,30 +65,58 @@ func New{{$Table}}() *{{$Table}} {
 func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
     target = New{{$Table}}()
 
-    {{if .Fields}}
+    var fields byte
 
-    var __fields byte
-
-    __fields,err = reader.ReadByte()
+    fields,err = gorpc.ReadByte(reader)
 
     if err != nil {
         return
     }
-    {{else}}
-    _,err = reader.ReadByte()
-    {{end}}
 
     {{range .Fields}}
-    target.{{title .Name}},err = {{readType .Type}}(reader)
-    if err != nil {
-        return
-    }
 
-    if __fields == 0 {
-        return
-    }
+    {
+        var tag byte
+        tag,err = gorpc.ReadByte(reader)
 
+        if err != nil {
+            return
+        }
+
+        if tag != byte(gorpc.TagSkip) {
+            target.{{title .Name}},err = {{readType .Type}}(reader)
+
+            if err != nil {
+                return
+            }
+        }
+
+        fields --
+
+        if fields == 0 {
+            return
+        }
+    }
     {{end}}
+
+    for i :=0;i < int(fields); i ++ {
+
+        var tag byte
+
+        tag,err = gorpc.ReadByte(reader)
+
+        if err != nil {
+            return
+        }
+
+        if tag == byte(gorpc.TagSkip) {
+            continue
+        }
+
+        gorpc.SkipRead(reader,gorpc.Tag(tag))
+    }
+
+
     return
 }
 
@@ -96,13 +124,14 @@ func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
 //Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
 func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
 
-    err = writer.WriteByte(byte({{len .Fields}}))
+    err = gorpc.WriteByte(writer,byte({{len .Fields}}))
 
     if err != nil {
         return
     }
 
     {{range .Fields}}
+    gorpc.WriteByte(writer,byte({{tagValue .Type}}))
     err = {{writeType .Type}}(writer,val.{{title .Name}})
     if err != nil {
         return
@@ -135,46 +164,72 @@ func New{{$Table}}() *{{$Table}} {
 func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
     target = New{{$Table}}()
 
-    {{if .Fields}}
+    var fields byte
 
-    var __fields byte
-
-    __fields,err = reader.ReadByte()
+    fields,err = gorpc.ReadByte(reader)
 
     if err != nil {
         return
     }
-    {{else}}
-    _,err = reader.ReadByte()
-    {{end}}
 
     {{range .Fields}}
-    target.{{title .Name}},err = {{readType .Type}}(reader)
-    if err != nil {
-        return
-    }
 
-    __fields --
+    {
+        var tag byte
+        tag,err = gorpc.ReadByte(reader)
 
-    if __fields == 0 {
-        return
+        if err != nil {
+            return
+        }
+
+        if tag != byte(gorpc.TagSkip) {
+            target.{{title .Name}},err = {{readType .Type}}(reader)
+
+            if err != nil {
+                return
+            }
+        }
+
+        fields --
+
+        if fields == 0 {
+            return
+        }
     }
 
     {{end}}
+
+    for i :=0;i < int(fields); i ++ {
+
+        var tag byte
+
+        tag,err = gorpc.ReadByte(reader)
+
+        if err != nil {
+            return
+        }
+
+        if tag == byte(gorpc.TagSkip) {
+            continue
+        }
+
+        gorpc.SkipRead(reader,gorpc.Tag(tag))
+    }
+
     return
 }
 
 
 //Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
 func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
-
-    err = writer.WriteByte(byte({{len .Fields}}))
+    err = gorpc.WriteByte(writer,byte({{len .Fields}}))
 
     if err != nil {
         return
     }
 
     {{range .Fields}}
+    gorpc.WriteByte(writer,byte({{tagValue .Type}}))
     err = {{writeType .Type}}(writer,val.{{title .Name}})
     if err != nil {
         return
@@ -455,9 +510,17 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
 
 {{define "readArray"}}func(reader gorpc.Reader)({{typeName .}},error) {
     var buff {{typeName .}}
+
+    length ,err := gorpc.ReadUInt16(reader)
+
     if err != nil {
         return buff,err
     }
+
+    if length != {{.Size}} {
+        return buff,gserrors.Newf(nil,"check array size failed")
+    }
+
     for i := uint16(0); i < {{.Size}}; i ++ {
         buff[i] ,err = {{readType .Component}}(reader)
         if err != nil {
@@ -469,9 +532,20 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
 
 {{define "readByteArray"}}func(reader gorpc.Reader)({{typeName .}},error) {
     var buff {{typeName .}}
+
+    length ,err := gorpc.ReadUInt16(reader)
     if err != nil {
         return buff,err
     }
+
+    if length != {{.Size}} {
+        return buff,gserrors.Newf(nil,"check array size failed")
+    }
+
+    if length == 0 {
+        return buff,nil
+    }
+
     err = gorpc.ReadBytes(reader,buff[:])
     return buff,err
 }{{end}}
@@ -497,7 +571,10 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
     }
     return nil
 }{{end}}
+
+
 {{define "writeArray"}}func(writer gorpc.Writer,val {{typeName .}})(error) {
+    gorpc.WriteUInt16(writer,uint16(len(val)))
     for _,c:= range val {
         err := {{writeType .Component}}(writer,c)
         if err != nil {
@@ -506,8 +583,16 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
     }
     return nil
 }{{end}}
+
 {{define "writeByteArray"}}func(writer gorpc.Writer,val {{typeName .}})(error) {
-    return gorpc.WriteBytes(writer,val[:])
+    err := gorpc.WriteUInt16(writer,uint16(len(val)))
+    if err != nil {
+        return err
+    }
+    if len(val) != 0 {
+        return gorpc.WriteBytes(writer,val[:])
+    }
+    return nil
 }{{end}}
 
 `

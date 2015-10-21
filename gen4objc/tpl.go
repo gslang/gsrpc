@@ -83,21 +83,36 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
 - (void) marshal:(id<GSWriter>) writer {
     [writer WriteByte :(UInt8){{len .Fields}}];
 {{range .Fields}}
+    [writer WriteByte :(UInt8){{tagValue .Type}}];
 {{marshalField .}}
 {{end}}
 }
 - (void) unmarshal:(id<GSReader>) reader {
-{{if .Fields}}
     UInt8 __fields = [reader ReadByte];
-{{else}}
-    [reader ReadByte];
-{{end}}
 {{range .Fields}}
-{{unmarshalField .}}
-    if(-- __fields == 0) {
-        return;
+    {
+        UInt8 tag = [reader ReadByte];
+
+        if(tag != GSTagSkip) {
+        {{unmarshalField .}}
+        }
+
+        if(-- __fields == 0) {
+            return;
+        }
     }
+
 {{end}}
+
+    for(int i = 0; i < (int)__fields; i ++) {
+        UInt8 tag = [reader ReadByte];
+
+        if (tag == GSTagSkip) {
+            continue;
+        }
+
+        [reader ReadSkip:tag];
+    }
 }
 
 @end
@@ -137,21 +152,38 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
 - (void) marshal:(id<GSWriter>) writer {
     [writer WriteByte :(UInt8){{len .Fields}}];
 {{range .Fields}}
+    [writer WriteByte :(UInt8){{tagValue .Type}}];
 {{marshalField .}}
 {{end}}
 }
 - (void) unmarshal:(id<GSReader>) reader {
-{{if .Fields}}
+
     UInt8 __fields = [reader ReadByte];
-{{else}}
-    [reader ReadByte];
-{{end}}
+
 {{range .Fields}}
-{{unmarshalField .}}
-    if(-- __fields == 0) {
-        return;
+    {
+        UInt8 tag = [reader ReadByte];
+
+        if(tag != GSTagSkip) {
+        {{unmarshalField .}}
+        }
+
+        if(-- __fields == 0) {
+            return;
+        }
     }
+
 {{end}}
+
+    for(int i = 0; i < (int)__fields; i ++) {
+        UInt8 tag = [reader ReadByte];
+
+        if (tag == GSTagSkip) {
+            continue;
+        }
+
+        [reader ReadSkip:tag];
+    }
 }
 
 - (NSError*) asNSError {

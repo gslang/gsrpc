@@ -20,7 +20,7 @@ public enum {{title .Name}} {
             return "{{title .Name}}";
         {{end}}
         }
-        return String.format("{{title .Name}}#%d",this.value);
+        return "{{title .Name}}#" + this.value;
     }
     public {{enumType .}} getValue() {
         return this.value;
@@ -71,6 +71,7 @@ public class {{$Struct}} extends Exception
     {
         writer.writeByte((byte){{len .Fields}});
 {{range .Fields}}
+        writer.writeByte((byte){{tagValue .Type}});
         {{marshalField .}}
 {{end}}
     }
@@ -78,11 +79,28 @@ public class {{$Struct}} extends Exception
     {
         byte __fields = reader.readByte();
 {{range .Fields}}
-        {{unmarshalField .}}
-        if(-- __fields == 0) {
-            return;
+        {
+            byte tag = reader.readByte();
+
+            if(tag != com.gsrpc.Tag.Skip.getValue()) {
+                {{unmarshalField .}}
+            }
+
+            if(-- __fields == 0) {
+                return;
+            }
         }
+
 {{end}}
+        for(int i = 0; i < (int)__fields; i ++) {
+            byte tag = reader.readByte();
+
+            if (tag == com.gsrpc.Tag.Skip.getValue()) {
+                continue;
+            }
+
+            reader.readSkip(tag);
+        }
     }
 }
 {{end}}
@@ -112,18 +130,36 @@ public class {{$Struct}}
     {
         writer.writeByte((byte){{len .Fields}});
 {{range .Fields}}
+        writer.writeByte((byte){{tagValue .Type}});
         {{marshalField .}}
 {{end}}
     }
     public void unmarshal(Reader reader) throws Exception
     {
         byte __fields = reader.readByte();
-{{range .Fields}}
-        {{unmarshalField .}}
-        if(-- __fields == 0) {
-            return;
+        {{range .Fields}}
+        {
+            byte tag = reader.readByte();
+
+            if(tag != com.gsrpc.Tag.Skip.getValue()) {
+                {{unmarshalField .}}
+            }
+
+            if(-- __fields == 0) {
+                return;
+            }
         }
-{{end}}
+
+        {{end}}
+        for(int i = 0; i < (int)__fields; i ++) {
+            byte tag = reader.readByte();
+
+            if (tag == com.gsrpc.Tag.Skip.getValue()) {
+                continue;
+            }
+
+            reader.readSkip(tag);
+        }
     }
 }
 {{end}}

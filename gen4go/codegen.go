@@ -121,6 +121,7 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 		"callArgs":    codeGen.callArgs,
 		"returnArgs":  codeGen.returnArgs,
 		"notVoid":     codeGen.notVoid,
+		"tagValue":    codeGen.tagValue,
 	}
 
 	tpl, err := template.New("gen4go").Funcs(funcs).Parse(tpl4go)
@@ -132,6 +133,55 @@ func NewCodeGen(rootpath string) (gslang.Visitor, error) {
 	codeGen.tpl = tpl
 
 	return codeGen, nil
+}
+
+func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+
+		switch builtinType.Type {
+		case lexer.KeySByte, lexer.KeyByte, lexer.KeyBool:
+			return "gorpc.TagI8"
+		case lexer.KeyInt16, lexer.KeyUInt16:
+			return "gorpc.TagI16"
+		case lexer.KeyInt32, lexer.KeyUInt32, lexer.KeyFloat32:
+			return "gorpc.TagI32"
+		case lexer.KeyInt64, lexer.KeyUInt64, lexer.KeyFloat64:
+			return "gorpc.TagI64"
+		case lexer.KeyString:
+			return "gorpc.TagString"
+		}
+
+	case *ast.TypeRef:
+		return codegen.tagValue(typeDecl.(*ast.TypeRef).Ref)
+	case *ast.Enum:
+
+		if codegen.enumSize(typeDecl) == 4 {
+			return "gorpc.TagI32"
+		}
+
+		return "gorpc.TagI8"
+
+	case *ast.Table:
+		return "gorpc.TagTable"
+	case *ast.Seq:
+
+		seq := typeDecl.(*ast.Seq)
+
+		component := codegen.tagValue(seq.Component)
+
+		if component == "gorpc.TagList" {
+			start, _ := gslang.Pos(typeDecl)
+			gserrors.Panicf(nil, "list component %v can't be a list :%v", seq.Component, start)
+		}
+
+		return fmt.Sprintf("(%s << 4)|gorpc.TagList", component)
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return ""
 }
 
 func (codegen *_CodeGen) notVoid(typeDecl ast.Type) bool {

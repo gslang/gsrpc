@@ -141,6 +141,7 @@ func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 		"notVoid":         codeGen.notVoid,
 		"marshalParams":   codeGen.marshalParams,
 		"callback":        codeGen.callback,
+		"tagValue":        codeGen.tagValue,
 	}
 
 	tpl, err := template.New("t4objc").Funcs(funcs).Parse(t4objc)
@@ -178,11 +179,62 @@ func (codegen *_CodeGen) callback(method *ast.Method) string {
 func enumType(typeDecl ast.Type) string {
 	_, ok := gslang.FindAnnotation(typeDecl, "gslang.Flag")
 
-	if ok {
+	if !ok {
 		return builtin[lexer.KeyUInt32]
 	}
 
 	return builtin[lexer.KeyByte]
+}
+
+func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+
+		switch builtinType.Type {
+		case lexer.KeySByte, lexer.KeyByte, lexer.KeyBool:
+			return "GSTagI8"
+		case lexer.KeyInt16, lexer.KeyUInt16:
+			return "GSTagI16"
+		case lexer.KeyInt32, lexer.KeyUInt32, lexer.KeyFloat32:
+			return "GSTagI32"
+		case lexer.KeyInt64, lexer.KeyUInt64, lexer.KeyFloat64:
+			return "GSTagI64"
+		case lexer.KeyString:
+			return "GSTagString"
+		}
+
+	case *ast.TypeRef:
+		return codegen.tagValue(typeDecl.(*ast.TypeRef).Ref)
+	case *ast.Enum:
+
+		_, ok := gslang.FindAnnotation(typeDecl, "gslang.Flag")
+
+		if !ok {
+			return "GSTagI32"
+		}
+
+		return "GSTagI8"
+
+	case *ast.Table:
+		return "GSTagTable"
+	case *ast.Seq:
+
+		seq := typeDecl.(*ast.Seq)
+
+		component := codegen.tagValue(seq.Component)
+
+		if component == "GSTagList" {
+			start, _ := gslang.Pos(typeDecl)
+			gserrors.Panicf(nil, "list component %v can't be a list :%v", seq.Component, start)
+		}
+
+		return fmt.Sprintf("((%s << 4)|GSTagList)", component)
+	}
+
+	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
+
+	return ""
 }
 
 func (codegen *_CodeGen) enumRead(typeDecl ast.Type) string {
