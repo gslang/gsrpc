@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -97,30 +98,46 @@ type _CodeGen struct {
 	imports      map[string]string  // imports
 	packageName  string             // package name
 	scriptPath   string             // script path
+	skips        []*regexp.Regexp   // skip lists
 }
 
 // NewCodeGen .
-func NewCodeGen(rootpath string) (gslang.Visitor, error) {
+func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 
 	codeGen := &_CodeGen{
 		Log:      gslogger.Get("gen4go"),
 		rootpath: rootpath,
 	}
 
+	for _, skip := range skips {
+		exp, err := regexp.Compile(skip)
+
+		if err != nil {
+			return nil, gserrors.Newf(err, "invalid skip regex string :%s", skip)
+		}
+
+		codeGen.skips = append(codeGen.skips, exp)
+	}
+
 	funcs := template.FuncMap{
-		"title":       strings.Title,
-		"enumType":    codeGen.enumType,
-		"enumSize":    codeGen.enumSize,
+		"title": strings.Title,
+		"enumType": func(typeDecl ast.Type) string {
+			return builtin[gslang.EnumType(typeDecl)]
+		},
+		"notVoid":     gslang.NotVoid,
+		"isPOD":       gslang.IsPOD,
+		"isAsync":     gslang.IsAsync,
+		"isException": gslang.IsException,
+		"enumSize":    gslang.EnumSize,
+		"builtin":     gslang.IsBuiltin,
 		"typeName":    codeGen.typeName,
 		"defaultVal":  codeGen.defaultVal,
-		"builtin":     codeGen.builtin,
 		"readType":    codeGen.readType,
 		"writeType":   codeGen.writeType,
 		"params":      codeGen.params,
 		"returnParam": codeGen.returnParam,
 		"callArgs":    codeGen.callArgs,
 		"returnArgs":  codeGen.returnArgs,
-		"notVoid":     codeGen.notVoid,
 		"tagValue":    codeGen.tagValue,
 	}
 
@@ -157,7 +174,7 @@ func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
 		return codegen.tagValue(typeDecl.(*ast.TypeRef).Ref)
 	case *ast.Enum:
 
-		if codegen.enumSize(typeDecl) == 4 {
+		if gslang.EnumSize(typeDecl) == 4 {
 			return "gorpc.TagI32"
 		}
 
@@ -182,42 +199,6 @@ func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
 	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
 
 	return ""
-}
-
-func (codegen *_CodeGen) notVoid(typeDecl ast.Type) bool {
-	builtinType, ok := typeDecl.(*ast.BuiltinType)
-
-	if !ok {
-		return true
-	}
-
-	return builtinType.Type != lexer.KeyVoid
-}
-
-func (codegen *_CodeGen) enumType(typeDecl ast.Type) string {
-	_, ok := gslang.FindAnnotation(typeDecl, "gslang.Flag")
-
-	if ok {
-		return builtin[lexer.KeyUInt32]
-	}
-
-	return builtin[lexer.KeyByte]
-}
-
-func (codegen *_CodeGen) builtin(typeDecl ast.Type) bool {
-	_, ok := typeDecl.(*ast.BuiltinType)
-
-	return ok
-}
-
-func (codegen *_CodeGen) enumSize(typeDecl ast.Type) int {
-	_, ok := gslang.FindAnnotation(typeDecl, "gslang.Flag")
-
-	if ok {
-		return 4
-	}
-
-	return 1
 }
 
 func (codegen *_CodeGen) params(params []*ast.Param) string {
@@ -249,7 +230,7 @@ func (codegen *_CodeGen) callArgs(params []*ast.Param) string {
 }
 
 func (codegen *_CodeGen) returnParam(param ast.Type) string {
-	if codegen.notVoid(param) {
+	if gslang.NotVoid(param) {
 		return fmt.Sprintf("(retval %s,err error)", codegen.typeName(param))
 	}
 
@@ -257,7 +238,7 @@ func (codegen *_CodeGen) returnParam(param ast.Type) string {
 }
 
 func (codegen *_CodeGen) returnArgs(param ast.Type) string {
-	if codegen.notVoid(param) {
+	if gslang.NotVoid(param) {
 		return "retval,err"
 	}
 
@@ -537,6 +518,16 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 
 func (codegen *_CodeGen) BeginScript(compiler *gslang.Compiler, script *ast.Script) bool {
 
+	scriptPath := filepath.ToSlash(filepath.Clean(script.Name()))
+
+	for _, skip := range codegen.skips {
+
+		if skip.MatchString(scriptPath) {
+
+			return false
+		}
+	}
+
 	if strings.HasPrefix(script.Package, "gslang.") {
 		return false
 	}
@@ -596,19 +587,18 @@ func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) 
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "table", tableType); err != nil {
 		gserrors.Panicf(err, "exec template(table) for %s errir", tableType)
 	}
+
 }
-func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Table) {
-	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "exception", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(exception) for %s errir", tableType)
-	}
-}
+
 func (codegen *_CodeGen) Annotation(compiler *gslang.Compiler, annotation *ast.Table) {
 }
+
 func (codegen *_CodeGen) Enum(compiler *gslang.Compiler, enum *ast.Enum) {
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "enum", enum); err != nil {
 		gserrors.Panicf(err, "exec template(enum) for %s errir", enum)
 	}
 }
+
 func (codegen *_CodeGen) Contract(compiler *gslang.Compiler, contract *ast.Contract) {
 	if err := codegen.tpl.ExecuteTemplate(&codegen.content, "contract", contract); err != nil {
 		gserrors.Panicf(err, "exec template(contract) for %s errir", contract)

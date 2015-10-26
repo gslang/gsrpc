@@ -6,8 +6,8 @@ using gslang.Exception;
 using gslang.Flag;
 using gslang.Package;
 
-@Package(Lang:"objc",Name:"com.gsrpc",Redirect:"GSTest")
-
+@Package(Lang:"objc",Name:"com.gsrpc.test",Redirect:"GSTest")
+@Package(Lang:"golang",Name:"com.gsrpc.test",Redirect:"github.com/gsrpc/gorpc/test")
 
 enum TimeUnit{
     Second
@@ -25,10 +25,6 @@ table Description {
     string Text; // Description text
     //long texts
     string LongText;
-}
-
-@Usage(Target.Method)
-table Async {
 }
 
 @Usage(Target.Param)
@@ -55,12 +51,15 @@ table KV {
 
 // RESTful API
 contract RESTful {
-    @Async
+
     // invoke http post method
     @Timeout(Duration(-100,TimeUnit.Second))
     void Post(string name,byte[] content) throws (RemoteException,NotFound);
     // get invoke http get method
     byte[] Get(string name) throws (NotFound);
+
+    @gslang.Async
+    void SayHello(string message);
 }
 
 table Block {

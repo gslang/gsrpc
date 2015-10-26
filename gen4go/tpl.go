@@ -38,110 +38,6 @@ func (val {{$Enum}}) String() string {
 
 {{end}}
 
-{{define "exception"}} {{$Table := title .Name}}
-
-//{{$Table}} -- generate by gsc
-type {{$Table}} struct {
-    {{range .Fields}}
-    {{title .Name}} {{typeName .Type}}
-    {{end}}
-}
-
-//Error implement error interface
-func (e * {{$Table}}) Error() string {
-    return "{{$Table}} error"
-}
-
-//New{{$Table}} create new struct object with default field val -- generate by gsc
-func New{{$Table}}() *{{$Table}} {
-    return &{{$Table}}{
-        {{range .Fields}}
-        {{title .Name}}: {{defaultVal .Type}},
-        {{end}}
-    }
-}
-
-//Read{{$Table}} read {{$Table}} from input stream -- generate by gsc
-func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
-    target = New{{$Table}}()
-
-    var fields byte
-
-    fields,err = gorpc.ReadByte(reader)
-
-    if err != nil {
-        return
-    }
-
-    {{range .Fields}}
-
-    {
-        var tag byte
-        tag,err = gorpc.ReadByte(reader)
-
-        if err != nil {
-            return
-        }
-
-        if tag != byte(gorpc.TagSkip) {
-            target.{{title .Name}},err = {{readType .Type}}(reader)
-
-            if err != nil {
-                return
-            }
-        }
-
-        fields --
-
-        if fields == 0 {
-            return
-        }
-    }
-    {{end}}
-
-    for i :=0;i < int(fields); i ++ {
-
-        var tag byte
-
-        tag,err = gorpc.ReadByte(reader)
-
-        if err != nil {
-            return
-        }
-
-        if tag == byte(gorpc.TagSkip) {
-            continue
-        }
-
-        gorpc.SkipRead(reader,gorpc.Tag(tag))
-    }
-
-
-    return
-}
-
-
-//Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
-func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
-
-    err = gorpc.WriteByte(writer,byte({{len .Fields}}))
-
-    if err != nil {
-        return
-    }
-
-    {{range .Fields}}
-    gorpc.WriteByte(writer,byte({{tagValue .Type}}))
-    err = {{writeType .Type}}(writer,val.{{title .Name}})
-    if err != nil {
-        return
-    }
-    {{end}}
-    return nil
-}
-
-{{end}}
-
 {{define "table"}} {{$Table := title .Name}}
 
 //{{$Table}} -- generate by gsc
@@ -151,6 +47,13 @@ type {{$Table}} struct {
     {{end}}
 }
 
+{{if isException .}}
+//Error implement error interface
+func (e * {{$Table}}) Error() string {
+    return "{{$Table}} error"
+}
+{{end}}
+
 //New{{$Table}} create new struct object with default field val -- generate by gsc
 func New{{$Table}}() *{{$Table}} {
     return &{{$Table}}{
@@ -160,6 +63,39 @@ func New{{$Table}}() *{{$Table}} {
     }
 }
 
+{{if isPOD .}}
+//Read{{$Table}} read {{$Table}} from input stream -- generate by gsc
+func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
+    target = New{{$Table}}()
+
+    {{range .Fields}}
+
+    {
+        target.{{title .Name}},err = {{readType .Type}}(reader)
+
+        if err != nil {
+            return
+        }
+    }
+    {{end}}
+
+    return
+}
+
+
+//Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
+func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
+
+    {{range .Fields}}
+    err = {{writeType .Type}}(writer,val.{{title .Name}})
+    if err != nil {
+        return
+    }
+    {{end}}
+    return nil
+}
+
+{{else}}
 //Read{{$Table}} read {{$Table}} from input stream -- generate by gsc
 func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
     target = New{{$Table}}()
@@ -196,7 +132,6 @@ func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
             return
         }
     }
-
     {{end}}
 
     for i :=0;i < int(fields); i ++ {
@@ -216,12 +151,14 @@ func Read{{$Table}}(reader gorpc.Reader) (target *{{$Table}},err error) {
         gorpc.SkipRead(reader,gorpc.Tag(tag))
     }
 
+
     return
 }
 
 
 //Write{{$Table}} write {{$Table}} to output stream -- generate by gsc
 func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
+
     err = gorpc.WriteByte(writer,byte({{len .Fields}}))
 
     if err != nil {
@@ -237,6 +174,8 @@ func Write{{$Table}}(writer gorpc.Writer,val *{{$Table}}) (err error) {
     {{end}}
     return nil
 }
+{{end}}
+
 
 {{end}}
 
@@ -294,12 +233,13 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
         {{end}}
 
 
-        {{if notVoid .Return}}
+        {{if isAsync . | not }}{{if notVoid .Return}}
         var retval {{typeName .Return}}
-        {{end}}
+        {{end}}{{end}}
 
         {{returnArgs .Return}} = maker.impl.{{$Name}}{{callArgs .Params}}
 
+        {{if isAsync . | not }}
         if err != nil {
 
             {{if .Exceptions}}
@@ -363,6 +303,7 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
             Exception:int8(-1),
         }
         {{end}}
+        {{end}}
 
         return
 
@@ -409,7 +350,10 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
     call.Params = append(call.Params,&gorpc.Param{Content:param{{.ID}}.Bytes()})
     {{end}}
 
-
+    {{if isAsync .}}
+    err = binder.channel.Post(call)
+    return
+    {{else}}
     var future gorpc.Future
     future, err = binder.channel.Send(call)
     if err != nil {
@@ -452,6 +396,7 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
         err = gserrors.Newf(err,"read {{$Contract}}#{{$Name}} return")
         return
     }
+    {{end}}
     {{end}}
     return
 }
