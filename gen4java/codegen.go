@@ -130,38 +130,48 @@ func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 	}
 
 	funcs := template.FuncMap{
-		"exception":           exception,
-		"title":               strings.Title,
-		"methodName":          methodName,
-		"fieldName":           fieldname,
-		"enumFields":          codeGen.enumFields,
-		"enumType":            codeGen.enumType,
-		"enumSize":            codeGen.enumSize,
-		"typeName":            codeGen.typeName,
-		"objTypeName":         codeGen.objTypeName,
-		"exceptionTypeName":   codeGen.exceptionTypeName,
-		"defaultVal":          codeGen.defaultVal,
-		"exceptionDefaultVal": codeGen.exceptionDefaultVal,
-		"builtin":             codeGen.builtin,
-		"readType":            codeGen.readType,
-		"writeType":           codeGen.writeType,
-		"params":              codeGen.params,
-		"returnParam":         codeGen.returnParam,
-		"callArgs":            codeGen.callArgs,
-		"returnArgs":          codeGen.returnArgs,
-		"notVoid":             codeGen.notVoid,
-		"marshalField":        codeGen.marshalfield,
-		"unmarshalField":      codeGen.unmarshalfield,
-		"unmarshalParam":      codeGen.unmarshalParam,
-		"methodcall":          codeGen.methodcall,
-		"marshalParam":        codeGen.marshalParam,
-		"marshalReturn":       codeGen.marshalReturn,
-		"methodRPC":           codeGen.methodRPC,
-		"marshalParams":       codeGen.marshalParams,
-		"callback":            codeGen.callback,
-		"unmarshalReturn":     codeGen.unmarshalReturn,
-		"constructor":         codeGen.constructor,
-		"tagValue":            codeGen.tagValue,
+		"exception": exception,
+		"title":     strings.Title,
+		"tableName": func(typeDecl ast.Type) string {
+			if gslang.IsException(typeDecl) {
+				return exception(strings.Title(typeDecl.Name()))
+			}
+
+			return strings.Title(typeDecl.Name())
+		},
+		"methodName":  methodName,
+		"fieldName":   fieldname,
+		"enumFields":  codeGen.enumFields,
+		"notVoid":     gslang.NotVoid,
+		"isPOD":       gslang.IsPOD,
+		"isAsync":     gslang.IsAsync,
+		"isException": gslang.IsException,
+		"enumSize":    gslang.EnumSize,
+		"enumType": func(typeDecl ast.Type) string {
+			return builtin[gslang.EnumType(typeDecl)]
+		},
+		"builtin":         gslang.IsBuiltin,
+		"typeName":        codeGen.typeName,
+		"objTypeName":     codeGen.objTypeName,
+		"defaultVal":      codeGen.defaultVal,
+		"readType":        codeGen.readType,
+		"writeType":       codeGen.writeType,
+		"params":          codeGen.params,
+		"returnParam":     codeGen.returnParam,
+		"callArgs":        codeGen.callArgs,
+		"returnArgs":      codeGen.returnArgs,
+		"marshalField":    codeGen.marshalfield,
+		"unmarshalField":  codeGen.unmarshalfield,
+		"unmarshalParam":  codeGen.unmarshalParam,
+		"methodcall":      codeGen.methodcall,
+		"marshalParam":    codeGen.marshalParam,
+		"marshalReturn":   codeGen.marshalReturn,
+		"methodRPC":       codeGen.methodRPC,
+		"marshalParams":   codeGen.marshalParams,
+		"callback":        codeGen.callback,
+		"unmarshalReturn": codeGen.unmarshalReturn,
+		"constructor":     codeGen.constructor,
+		"tagValue":        codeGen.tagValue,
 	}
 
 	tpl, err := template.New("t4java").Funcs(funcs).Parse(t4java)
@@ -284,16 +294,25 @@ func (codegen *_CodeGen) methodRPC(method *ast.Method) string {
 	if codegen.notVoid(method.Return) {
 		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<%s> %s(", codegen.objTypeName(method.Return), methodName(method.Name())))
 	} else {
-		buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", methodName(method.Name())))
+		if gslang.IsAsync(method) {
+			buff.WriteString(fmt.Sprintf("void %s(", methodName(method.Name())))
+		} else {
+			buff.WriteString(fmt.Sprintf("com.gsrpc.Future<Void> %s(", methodName(method.Name())))
+		}
+
 	}
 
 	for _, v := range method.Params {
 		buff.WriteString(fmt.Sprintf("%s arg%d, ", codegen.typeName(v.Type), v.ID))
 	}
 
-	buff.WriteString("final int timeout)")
+	if !gslang.IsAsync(method) {
+		buff.WriteString("final int timeout)")
+	} else {
+		buff.WriteString(")")
+	}
 
-	return buff.String()
+	return strings.Replace(buff.String(), ", )", ")", -1)
 }
 
 func (codegen *_CodeGen) marshalReturn(typeDecl ast.Type, varname string, indent int) string {
@@ -319,7 +338,7 @@ func (codegen *_CodeGen) marshalReturn(typeDecl ast.Type, varname string, indent
 
 	writeindent(&buff, indent+1)
 
-	buff.WriteString("returnParam = writer.Content();\n\n")
+	buff.WriteString("returnParam = writer.getContent();\n\n")
 
 	writeindent(&buff, indent)
 
@@ -350,7 +369,7 @@ func (codegen *_CodeGen) marshalParam(param *ast.Param, varname string, indent i
 
 	writeindent(&buff, indent+1)
 
-	buff.WriteString("param.setContent(writer.Content());\n\n")
+	buff.WriteString("param.setContent(writer.getContent());\n\n")
 
 	writeindent(&buff, indent+1)
 
@@ -777,30 +796,6 @@ func (codegen *_CodeGen) objTypeName(typeDecl ast.Type) string {
 	return "unknown"
 }
 
-func (codegen *_CodeGen) exceptionTypeName(typeDecl ast.Type) string {
-	switch typeDecl.(type) {
-	case *ast.TypeRef:
-		typeRef := typeDecl.(*ast.TypeRef)
-
-		return codegen.exceptionTypeName(typeRef.Ref)
-
-	case *ast.Table:
-		prefix, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
-
-		name = exception(name)
-
-		if prefix != "" {
-			return prefix + "." + name
-		}
-
-		return name
-	}
-
-	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
-
-	return "unknown"
-}
-
 func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 	switch typeDecl.(type) {
 	case *ast.BuiltinType:
@@ -815,33 +810,16 @@ func (codegen *_CodeGen) typeName(typeDecl ast.Type) string {
 	case *ast.Enum, *ast.Table:
 		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
 
+		if gslang.IsException(typeDecl) {
+			return exception(name)
+		}
+
 		return name
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
 
 		return fmt.Sprintf("%s[]", codegen.typeName(seq.Component))
-	}
-
-	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
-
-	return "unknown"
-}
-
-func (codegen *_CodeGen) exceptionDefaultVal(typeDecl ast.Type) string {
-	switch typeDecl.(type) {
-	case *ast.TypeRef:
-		typeRef := typeDecl.(*ast.TypeRef)
-
-		return codegen.exceptionDefaultVal(typeRef.Ref)
-
-	case *ast.Table:
-
-		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
-
-		name = exception(name)
-
-		return "new " + name + "()"
 	}
 
 	gserrors.Panicf(nil, "typeName  error: unsupport type(%s)", typeDecl)
@@ -874,13 +852,7 @@ func (codegen *_CodeGen) defaultVal(typeDecl ast.Type) string {
 
 	case *ast.Table:
 
-		_, name := codegen.typeRef(typeDecl.Package(), typeDecl.FullName())
-		//
-		// if prefix != "" {
-		// 	return "new " + prefix + "." + name + "()"
-		// }
-
-		return "new " + name + "()"
+		return "new " + codegen.typeName(typeDecl) + "()"
 
 	case *ast.Seq:
 		return fmt.Sprintf("new %s", codegen.arrayDefaultVal(typeDecl))
@@ -896,10 +868,6 @@ func (codegen *_CodeGen) arrayDefaultVal(typeDecl ast.Type) string {
 
 	case *ast.Seq:
 		seq := typeDecl.(*ast.Seq)
-
-		if seq.Size != -1 {
-			return fmt.Sprintf("%s[%d]", codegen.arrayDefaultVal(seq.Component), seq.Size)
-		}
 
 		return fmt.Sprintf("%s[0]", codegen.arrayDefaultVal(seq.Component))
 
@@ -998,20 +966,17 @@ func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) 
 		gserrors.Panicf(err, "exec template(table) for %s error", tableType)
 	}
 
-	codegen.writeJavaFile(tableType.Name(), tableType, buff.Bytes())
-}
-func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Table) {
-
-	var buff bytes.Buffer
-
-	if err := codegen.tpl.ExecuteTemplate(&buff, "exception", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(exception) for %s error", tableType)
+	if gslang.IsException(tableType) {
+		codegen.writeJavaFile(exception(tableType.Name()), tableType, buff.Bytes())
+	} else {
+		codegen.writeJavaFile(tableType.Name(), tableType, buff.Bytes())
 	}
 
-	codegen.writeJavaFile(exception(tableType.Name()), tableType, buff.Bytes())
 }
+
 func (codegen *_CodeGen) Annotation(compiler *gslang.Compiler, annotation *ast.Table) {
 }
+
 func (codegen *_CodeGen) Enum(compiler *gslang.Compiler, enum *ast.Enum) {
 
 	var buff bytes.Buffer

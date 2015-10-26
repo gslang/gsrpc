@@ -44,11 +44,17 @@ public enum {{title .Name}} {
 }
 {{end}}
 
-{{define "exception"}}{{$Struct := exception .Name}}
-public class {{$Struct}} extends Exception
+{{define "table"}}{{$Struct := tableName .}}
+public class {{$Struct}} {{if isException .}}extends Exception{{end}}
 {
 {{range .Fields}}
     private  {{typeName .Type}} {{fieldName .Name}} = {{defaultVal .Type}};
+{{end}}
+
+{{if .Fields}}
+    public {{$Struct}}(){
+
+    }
 {{end}}
 
     public {{$Struct}}{{constructor .Fields}} {
@@ -67,6 +73,8 @@ public class {{$Struct}} extends Exception
         this.{{fieldName .Name}} = arg;
     }
 {{end}}
+
+{{if isPOD . | not}}
     public void marshal(Writer writer)  throws Exception
     {
         writer.writeByte((byte){{len .Fields}});
@@ -92,6 +100,7 @@ public class {{$Struct}} extends Exception
         }
 
 {{end}}
+
         for(int i = 0; i < (int)__fields; i ++) {
             byte tag = reader.readByte();
 
@@ -102,65 +111,24 @@ public class {{$Struct}} extends Exception
             reader.readSkip(tag);
         }
     }
-}
-{{end}}
-
-
-{{define "table"}}{{$Struct := title .Name}}
-/*
- * {{title .Name}} generate by gs2java,don't modify it manually
- */
-public class {{$Struct}}
-{
-{{range .Fields}}
-    private  {{typeName .Type}} {{fieldName .Name}} = {{defaultVal .Type}};
-{{end}}
-
-{{range .Fields}}
-    public {{typeName .Type}} get{{title .Name}}()
-    {
-        return this.{{fieldName .Name}};
-    }
-    public void set{{title .Name}}({{typeName .Type}} arg)
-    {
-        this.{{fieldName .Name}} = arg;
-    }
-{{end}}
+{{else}}
     public void marshal(Writer writer)  throws Exception
     {
-        writer.writeByte((byte){{len .Fields}});
 {{range .Fields}}
-        writer.writeByte((byte){{tagValue .Type}});
         {{marshalField .}}
 {{end}}
     }
+
     public void unmarshal(Reader reader) throws Exception
     {
-        byte __fields = reader.readByte();
-        {{range .Fields}}
+{{range .Fields}}
         {
-            byte tag = reader.readByte();
-
-            if(tag != com.gsrpc.Tag.Skip.getValue()) {
-                {{unmarshalField .}}
-            }
-
-            if(-- __fields == 0) {
-                return;
-            }
+            {{unmarshalField .}}
         }
-
-        {{end}}
-        for(int i = 0; i < (int)__fields; i ++) {
-            byte tag = reader.readByte();
-
-            if (tag == com.gsrpc.Tag.Skip.getValue()) {
-                continue;
-            }
-
-            reader.readSkip(tag);
-        }
+{{end}}
     }
+
+{{end}}
 }
 {{end}}
 
@@ -195,6 +163,7 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
         {{range .Methods}}
         case {{.ID}}: {
 {{range .Params}}{{unmarshalParam . "call" 4}}{{end}}
+                {{if isAsync . | not}}
                 {{if .Exceptions}}
                 try{
                 {{end}}
@@ -212,7 +181,7 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
 
                     return callReturn;
 
-                {{if .Exceptions}}}{{end}}{{range .Exceptions}} catch({{exceptionTypeName .Type}} e) {
+                {{if .Exceptions}}}{{end}}{{range .Exceptions}} catch({{typeName .Type}} e) {
 
                     com.gsrpc.BufferWriter writer = new com.gsrpc.BufferWriter();
 
@@ -222,10 +191,10 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
                     callReturn.setID(call.getID());
                     callReturn.setService(call.getService());
                     callReturn.setException((byte){{.ID}});
-                    callReturn.setContent(writer.Content());
+                    callReturn.setContent(writer.getContent());
 
                     return callReturn;
-                }{{end}}
+                }{{end}}{{end}}
             }
         {{end}}
         }
@@ -271,6 +240,7 @@ public final class {{$Contract}}RPC {
         request.setParams(params);
         {{end}}
 
+        {{if isAsync . | not}}
         com.gsrpc.Promise<{{objTypeName .Return}}> promise = new com.gsrpc.Promise<{{objTypeName .Return}}>(timeout){
             @Override
             public void Return(Exception e,com.gsrpc.Response callReturn){
@@ -288,7 +258,7 @@ public final class {{$Contract}}RPC {
                             case {{.ID}}:{
                             com.gsrpc.BufferReader reader = new com.gsrpc.BufferReader(callReturn.getContent());
 
-                            {{exceptionTypeName .Type}} exception = {{exceptionDefaultVal .Type}};
+                            {{typeName .Type}} exception = {{defaultVal .Type}};
 
                             {{readType "exception" .Type 4}}
 
@@ -318,6 +288,9 @@ public final class {{$Contract}}RPC {
         this.net.send(request,promise);
 
         return promise;
+        {{else}}
+        this.net.post(request);
+        {{end}}
     }
     {{end}}
 }
