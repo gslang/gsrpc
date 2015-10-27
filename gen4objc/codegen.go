@@ -120,7 +120,6 @@ func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 	}
 
 	funcs := template.FuncMap{
-		"enumType":        enumType,
 		"title":           codeGen.title,
 		"title2":          strings.Title,
 		"enumFields":      codeGen.enumFields,
@@ -138,10 +137,18 @@ func NewCodeGen(rootpath string, skips []string) (gslang.Visitor, error) {
 		"methodCall":      codeGen.methodCall,
 		"marshalReturn":   codeGen.marshalReturn,
 		"unmarshalReturn": codeGen.unmarshalReturn,
-		"notVoid":         codeGen.notVoid,
-		"marshalParams":   codeGen.marshalParams,
-		"callback":        codeGen.callback,
-		"tagValue":        codeGen.tagValue,
+		"notVoid":         gslang.NotVoid,
+		"isPOD":           gslang.IsPOD,
+		"isAsync":         gslang.IsAsync,
+		"isException":     gslang.IsException,
+		"enumSize":        gslang.EnumSize,
+		"enumType": func(typeDecl ast.Type) string {
+			return builtin[gslang.EnumType(typeDecl)]
+		},
+		"builtin":       gslang.IsBuiltin,
+		"marshalParams": codeGen.marshalParams,
+		"callback":      codeGen.callback,
+		"tagValue":      codeGen.tagValue,
 	}
 
 	tpl, err := template.New("t4objc").Funcs(funcs).Parse(t4objc)
@@ -640,8 +647,11 @@ func (codegen *_CodeGen) methodDecl(method *ast.Method) string {
 func (codegen *_CodeGen) rpcMethodDecl(method *ast.Method) string {
 
 	var stream bytes.Buffer
-
-	stream.WriteString("- (id<GSPromise>)")
+	if gslang.IsAsync(method) {
+		stream.WriteString("- (NSError*)")
+	} else {
+		stream.WriteString("- (id<GSPromise>)")
+	}
 
 	if len(method.Params) > 0 {
 		stream.WriteString(fmt.Sprintf(" %s:(%s) arg0 ", method.Name(), codegen.typeName(method.Params[0].Type)))
@@ -857,20 +867,6 @@ func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) 
 
 	if err := codegen.tpl.ExecuteTemplate(&codegen.source, "table_source", tableType); err != nil {
 		gserrors.Panicf(err, "exec template(table) for %s error", tableType)
-	}
-}
-func (codegen *_CodeGen) Exception(compiler *gslang.Compiler, tableType *ast.Table) {
-
-	if err := codegen.tpl.ExecuteTemplate(&codegen.predecl, "exception_predecl", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(exception_predecl) for %s error", tableType)
-	}
-
-	if err := codegen.tpl.ExecuteTemplate(&codegen.header, "exception_header", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(Exception) for %s error", tableType)
-	}
-
-	if err := codegen.tpl.ExecuteTemplate(&codegen.source, "exception_source", tableType); err != nil {
-		gserrors.Panicf(err, "exec template(Exception) for %s error", tableType)
 	}
 }
 
