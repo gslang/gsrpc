@@ -751,21 +751,21 @@ func (codegen *_CodeGen) unmarshalReturn(typeDecl ast.Type) string {
 func (codegen *_CodeGen) unmarshalParam(param *ast.Param, varname string) string {
 	var buff bytes.Buffer
 
-	writeindent(&buff, 2)
+	writeindent(&buff, 3)
 
 	buff.WriteString(fmt.Sprintf("%s arg%d = %s;\n\n", codegen.typeName(param.Type), param.ID, codegen.defaultVal(param.Type)))
 
-	writeindent(&buff, 2)
+	writeindent(&buff, 3)
 
 	buff.WriteString("{\n\n")
 
-	writeindent(&buff, 3)
+	writeindent(&buff, 4)
 
 	buff.WriteString(fmt.Sprintf("GSBytesReader *reader = [GSBytesReader initWithNSData: ((GSParam*)%s.Params[%d]).Content];\n\n", varname, param.ID))
 
-	buff.WriteString(codegen.unmarshal(fmt.Sprintf("arg%d", param.ID), param.Type, 3))
+	buff.WriteString(codegen.unmarshal(fmt.Sprintf("arg%d", param.ID), param.Type, 4))
 
-	writeindent(&buff, 2)
+	writeindent(&buff, 3)
 
 	buff.WriteString("}\n\n")
 

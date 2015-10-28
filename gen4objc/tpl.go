@@ -200,20 +200,19 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
 - (GSResponse*) Dispatch:(GSRequest*)call {
     switch(call.Method){
     {{range .Methods}}
-    case {{.ID}}:
-    {
+        case {{.ID}}:{
 {{range .Params}}{{unmarshalParam . "call"}}{{end}}
-        {{methodCall .}}
-        GSResponse * callreturn  = [GSResponse init];
-        callreturn.ID = call.ID;
-        callreturn.Service = call.Service;
-        {{if isAsync . | not}}
-        {{if notVoid .Return}}
-{{marshalReturn .Return}}
-        {{end}}
-        return callreturn;
-        {{end}}
-    }
+            {{methodCall .}}
+            {{if isAsync . | not}}
+            GSResponse * callreturn  = [GSResponse init];
+            callreturn.ID = call.ID;
+            callreturn.Service = call.Service;
+            {{if notVoid .Return}}
+        {{marshalReturn .Return}}
+            {{end}}
+            return callreturn;
+            {{end}}
+        }
     {{end}}
     }
     return nil;
@@ -248,7 +247,7 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
     call.Params = params;
     {{end}}
 
-    {{if .isAsync}}
+    {{if isAsync .| not}}
     return GSCreatePromise(_channel,call,^id<GSPromise>(GSResponse* response,id block){
 
 {{if notVoid .Return}}{{unmarshalReturn .Return}}{{end}}

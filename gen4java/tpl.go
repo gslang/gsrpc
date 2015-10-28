@@ -194,7 +194,10 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
                     callReturn.setContent(writer.getContent());
 
                     return callReturn;
-                }{{end}}{{end}}
+                }{{end}}
+                {{else}}
+                {{methodcall .}}
+                {{end}}
             }
         {{end}}
         }
