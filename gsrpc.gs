@@ -10,7 +10,7 @@ using gslang.Flag;
 
 // RPC message codes
 enum Code {
-    Heartbeat,WhoAmI,Request,Response,Accept,Reject,Tunnel
+    Heartbeat,WhoAmI,Request,Response,Accept,Reject,Tunnel,TunnelWhoAmI
 }
 
 enum State{
@@ -23,33 +23,41 @@ enum Tag{
 }
 
 // RPC message
+@gslang.POD
 table Message {
     Code    Code;       // message code
     byte    Agent;      // message agent id
     byte[]  Content;    // message content
 }
 
+@gslang.POD
 table Param {
     byte[] Content;
 }
 
+// The distribute trace system rpc call context
+table CallSite {
+
+}
+
+@gslang.POD
 table Request {
     uint16      ID;
     uint16      Method;
     uint16      Service;
     Param[]     Params;
+    CallSite    CallSite;
 }
 
+
+
+@gslang.POD
 table Response {
     uint16      ID;
     uint16      Service;
     sbyte       Exception; // exception id
     byte[]      Content;
-}
-
-table Tunnel {
-    Device      ID;
-    Message     Message;
+    CallSite    CallSite;
 }
 
 enum OSType {
@@ -61,6 +69,7 @@ enum ArchType {
 }
 
 // The client device type
+@gslang.POD
 table Device {
     string      ID;             // device udid
     string      Type;           // device type
@@ -70,6 +79,7 @@ table Device {
     string      AppKey;         // app key string
 }
 
+@gslang.POD
 table WhoAmI {
     Device      ID;             // device name
     byte[]      Context;         // context data

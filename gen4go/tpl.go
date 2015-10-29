@@ -232,6 +232,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
         }
         {{end}}
 
+        callSite := call.CallSite
+
 
         {{if isAsync . | not }}{{if notVoid .Return}}
         var retval {{typeName .Return}}
@@ -338,6 +340,7 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
     call := &gorpc.Request{
        Service:uint16(binder.id),
        Method:{{.ID}},
+       CallSite:callSite,
     }
 
 
@@ -365,6 +368,8 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
     if err != nil {
         return
     }
+
+    //TODO: handler response callsite
 
     if callReturn.Exception != -1 {
         switch callReturn.Exception {

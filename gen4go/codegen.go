@@ -204,7 +204,7 @@ func (codegen *_CodeGen) tagValue(typeDecl ast.Type) string {
 func (codegen *_CodeGen) params(params []*ast.Param) string {
 	var buff bytes.Buffer
 
-	buff.WriteString("(")
+	buff.WriteString("(callSite *gorpc.CallSite, ")
 
 	for _, param := range params {
 		buff.WriteString(fmt.Sprintf("%s %s, ", param.Name(), codegen.typeName(param.Type)))
@@ -218,7 +218,7 @@ func (codegen *_CodeGen) params(params []*ast.Param) string {
 func (codegen *_CodeGen) callArgs(params []*ast.Param) string {
 	var buff bytes.Buffer
 
-	buff.WriteString("(")
+	buff.WriteString("(callSite, ")
 
 	for _, param := range params {
 		buff.WriteString(param.Name() + ", ")
