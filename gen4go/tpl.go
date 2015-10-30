@@ -215,6 +215,16 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
         }
     }()
 
+    traceflag := trace.Flag()
+
+    if traceflag {
+        traceRPC := trace.RPC(call.Trace,uint32(call.Service) << 16 | uint32(call.Method),call.Prev)
+
+        traceRPC.Start()
+
+        defer traceRPC.End()
+    }
+
     switch call.Method {
     {{range .Methods}}{{$Name := title .Name}}
     case {{.ID}}:
@@ -232,7 +242,10 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
         }
         {{end}}
 
-        callSite := call.CallSite
+        callSite := &gorpc.CallSite {
+            ID : uint32(call.Service) << 16 | uint32({{.ID}}),
+            Trace : call.Trace,
+        }
 
 
         {{if isAsync . | not }}{{if notVoid .Return}}
@@ -269,8 +282,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
 
             callReturn = &gorpc.Response{
                 ID : call.ID,
-                Service:call.Service,
                 Exception:id,
+                Trace:call.Trace,
             }
 
             callReturn.Content = buff.Bytes()
@@ -292,8 +305,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
 
         callReturn = &gorpc.Response{
             ID : call.ID,
-            Service:call.Service,
             Exception:int8(-1),
+            Trace:call.Trace,
         }
 
         callReturn.Content = buff.Bytes()
@@ -301,8 +314,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
         {{else}}
         callReturn = &gorpc.Response{
             ID : call.ID,
-            Service:call.Service,
             Exception:int8(-1),
+            Trace:call.Trace,
         }
         {{end}}
         {{end}}
@@ -337,10 +350,29 @@ func (binder *_{{$Contract}}Binder){{$Name}}{{params .Params}}{{returnParam .Ret
        }
     }()
 
+    var traceID uint64
+    var traceParentID uint32
+
+    if trace.Flag() {
+        if callSite != nil  {
+            traceID = callSite.Trace
+            traceParentID = callSite.ID
+        } else {
+            traceID = trace.NewTrace()
+        }
+
+        traceRPC := trace.RPC(traceID,uint32(binder.id) << 16 | uint32({{.ID}}),traceParentID)
+
+        traceRPC.Start()
+
+        defer traceRPC.End()
+    }
+
     call := &gorpc.Request{
        Service:uint16(binder.id),
        Method:{{.ID}},
-       CallSite:callSite,
+       Trace:traceID,
+       Prev:traceParentID,
     }
 
 

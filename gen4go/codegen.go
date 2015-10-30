@@ -82,6 +82,7 @@ var defaultval = map[lexer.TokenType]string{
 
 var imports = map[string]string{
 	"gorpc.":    "github.com/gsrpc/gorpc",
+	"trace.":    "github.com/gsrpc/gorpc/trace",
 	"fmt.":      "fmt",
 	"bytes.":    "bytes",
 	"gsrpc.":    "com/gsrpc",

@@ -35,29 +35,23 @@ table Param {
     byte[] Content;
 }
 
-// The distribute trace system rpc call context
-table CallSite {
-
-}
 
 @gslang.POD
 table Request {
-    uint16      ID;
-    uint16      Method;
+    uint32      ID;
     uint16      Service;
+    uint16      Method;
     Param[]     Params;
-    CallSite    CallSite;
+    uint64      Trace;
+    uint32      Prev; // prev call stack service id
 }
-
-
 
 @gslang.POD
 table Response {
-    uint16      ID;
-    uint16      Service;
+    uint32      ID;
     sbyte       Exception; // exception id
     byte[]      Content;
-    CallSite    CallSite;
+    uint64      Trace;
 }
 
 enum OSType {
@@ -95,4 +89,16 @@ table UnmarshalException {
 
 @Exception
 table RemoteException {
+}
+
+@gslang.POD
+table KV {
+    byte[]     Key;
+    byte[]     Value;
+}
+
+@gslang.POD
+table Time {
+    uint64  Second;
+    uint64  Nano;
 }
