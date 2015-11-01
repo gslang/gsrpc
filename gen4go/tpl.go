@@ -206,6 +206,11 @@ func (maker *_{{$Contract}}Maker) ID() uint16 {
     return maker.id
 }
 
+// ID implement gorpc.Dispatcher
+func (maker *_{{$Contract}}Maker) String() string {
+    return "{{.FullName}}"
+}
+
 // Dispatch implement gorpc.Dispatcher
 func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gorpc.Response, err error) {
 
