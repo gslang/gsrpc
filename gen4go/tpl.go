@@ -189,6 +189,10 @@ type {{$Contract}} interface {
     {{end}}
 }
 
+const (
+    NameOf{{$Contract}} = "{{title .Name}}"
+)
+
 //_{{$Contract}}Maker -- generate by gs2go
 type _{{$Contract}}Maker struct {
     id            uint16          // service id
@@ -292,6 +296,8 @@ func (maker *_{{$Contract}}Maker) Dispatch(call *gorpc.Request) (callReturn *gor
             }
 
             callReturn.Content = buff.Bytes()
+
+            err = nil
 
             {{end}}
 
