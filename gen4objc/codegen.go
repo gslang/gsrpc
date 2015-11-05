@@ -313,12 +313,20 @@ func (codegen *_CodeGen) typePrefix(typeDecl ast.TypeDecl) string {
 
 			packageName, ok := lang.Args.NamedArg("Name")
 
-			if ok && compiler.Eval().EvalString(packageName) == codegen.script.Package {
+			if ok && compiler.Eval().EvalString(packageName) == typeDecl.Package() {
 
 				redirect, ok := lang.Args.NamedArg("Redirect")
 
 				if ok {
-					return compiler.Eval().EvalString(redirect)
+					prefix := compiler.Eval().EvalString(redirect)
+
+					if codegen.script.Name() != typeDecl.Script() {
+						v := fmt.Sprintf("#import <%s>\n\n", filepath.Join(strings.Replace(typeDecl.Package(), ".", "/", -1), filepath.Base(typeDecl.Script())+".h"))
+
+						codegen.imports[typeDecl.FullName()] = v
+					}
+
+					return prefix
 				}
 			}
 

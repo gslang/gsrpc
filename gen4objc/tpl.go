@@ -206,7 +206,6 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
             {{if isAsync . | not}}
             GSResponse * callreturn  = [GSResponse init];
             callreturn.ID = call.ID;
-            callreturn.Service = call.Service;
             {{if notVoid .Return}}
         {{marshalReturn .Return}}
             {{end}}
