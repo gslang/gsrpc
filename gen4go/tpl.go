@@ -190,7 +190,7 @@ type {{$Contract}} interface {
 }
 
 const (
-    NameOf{{$Contract}} = "{{title .Name}}"
+    NameOf{{$Contract}} = "{{.FullName}}"
 )
 
 //_{{$Contract}}Maker -- generate by gs2go

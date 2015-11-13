@@ -211,6 +211,7 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
             {{end}}
             return callreturn;
             {{end}}
+            break;
         }
     {{end}}
     }
@@ -247,9 +248,26 @@ enum {{title .}}:{{enumType .}}{ {{enumFields .}} };
     {{end}}
 
     {{if isAsync .| not}}
-    return GSCreatePromise(_channel,call,^id<GSPromise>(GSResponse* response,id block){
+    return GSCreatePromise(_channel,call,^id<GSPromise>(GSResponse* response,id block,NSError **error){
 
-{{if notVoid .Return}}{{unmarshalReturn .Return}}{{end}}
+        if(response.Exception != (SInt8)-1) {
+            switch(response.Exception){
+            {{range .Exceptions}}
+                case {{.ID}}:{
+{{unmarshalReturn .Type 5}}
+                    *error = [callreturn asNSError];
+                    break;
+                    }{{end}}
+                default:{
+                    NSString *domain = @"GSRemoteException";
+                    *error = [NSError errorWithDomain:domain code:-101 userInfo:nil];
+                }
+            }
+
+            return nil;
+        }
+
+{{if notVoid .Return}}{{unmarshalReturn .Return 2}}{{end}}
         return {{callback .}};
     });
     {{else}}

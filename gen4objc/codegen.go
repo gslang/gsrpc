@@ -732,24 +732,24 @@ func (codegen *_CodeGen) marshalReturn(typeDecl ast.Type) string {
 	return buff.String()
 }
 
-func (codegen *_CodeGen) unmarshalReturn(typeDecl ast.Type) string {
+func (codegen *_CodeGen) unmarshalReturn(typeDecl ast.Type, indent int) string {
 	var buff bytes.Buffer
 
-	writeindent(&buff, 2)
+	writeindent(&buff, indent)
 
 	buff.WriteString(fmt.Sprintf("%s callreturn = %s;\n\n", codegen.typeName(typeDecl), codegen.defaultVal(typeDecl)))
 
-	writeindent(&buff, 2)
+	writeindent(&buff, indent)
 
 	buff.WriteString("{\n\n")
 
-	writeindent(&buff, 3)
+	writeindent(&buff, indent+1)
 
 	buff.WriteString("GSBytesReader *reader = [GSBytesReader initWithNSData: response.Content];\n\n")
 
-	buff.WriteString(codegen.unmarshal("callreturn", typeDecl, 3))
+	buff.WriteString(codegen.unmarshal("callreturn", typeDecl, indent+1))
 
-	writeindent(&buff, 2)
+	writeindent(&buff, indent)
 
 	buff.WriteString("}\n\n")
 
