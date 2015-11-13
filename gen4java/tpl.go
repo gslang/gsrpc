@@ -171,7 +171,6 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
 
                     com.gsrpc.Response callReturn = new com.gsrpc.Response();
                     callReturn.setID(call.getID());
-                    callReturn.setService(call.getService());
                     callReturn.setException((byte)-1);
 
                     {{if notVoid .Return}}
@@ -189,7 +188,6 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
 
                     com.gsrpc.Response callReturn = new com.gsrpc.Response();
                     callReturn.setID(call.getID());
-                    callReturn.setService(call.getService());
                     callReturn.setException((byte){{.ID}});
                     callReturn.setContent(writer.getContent());
 

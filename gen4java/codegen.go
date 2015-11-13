@@ -889,19 +889,23 @@ func (codegen *_CodeGen) writeJavaFile(name string, expr ast.Expr, content []byt
 
 	jPackageName := javaPackageName(codegen.packageName)
 
+	packagename := strings.Replace(jPackageName, ".", "/", -1)
+
+	fullpath := filepath.Join(codegen.rootpath, packagename, name+".java")
+
 	buff.WriteString(fmt.Sprintf("package %s;\n\n", jPackageName))
 
 	for _, i := range codegen.imports {
+
+		if name == "EvtRPC" {
+			codegen.I("%s", i)
+		}
 
 		buff.WriteString(fmt.Sprintf("%s;\n\n", i))
 
 	}
 
 	buff.Write(content)
-
-	packagename := strings.Replace(jPackageName, ".", "/", -1)
-
-	fullpath := filepath.Join(codegen.rootpath, packagename, name+".java")
 
 	if err := os.MkdirAll(filepath.Dir(fullpath), 0755); err != nil {
 		gserrors.Panicf(err, "create output directory error")
@@ -955,7 +959,7 @@ func (codegen *_CodeGen) Using(compiler *gslang.Compiler, using *ast.Using) {
 		name = strings.Join(nodes[:len(nodes)-1], ".") + "." + exception(nodes[len(nodes)-1])
 	}
 
-	codegen.imports[nodes[len(nodes)-2]+"."] = "import " + name
+	codegen.imports[nodes[len(nodes)-1]] = "import " + name
 }
 
 func (codegen *_CodeGen) Table(compiler *gslang.Compiler, tableType *ast.Table) {
