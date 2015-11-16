@@ -79,6 +79,36 @@ var defaultval = map[lexer.TokenType]string{
 	lexer.KeyString:  "@\"\"",
 }
 
+var id2Type = map[lexer.TokenType]string{
+	lexer.KeySByte:   "(SInt8)((NSNumber*)%s).charValue",
+	lexer.KeyByte:    "(UInt8)((NSNumber*)%s).unsignedCharValue",
+	lexer.KeyInt16:   "(SInt16)((NSNumber*)%s).shortValue",
+	lexer.KeyUInt16:  "(UInt16)((NSNumber*)%s).unsignedShortValue",
+	lexer.KeyInt32:   "(SInt32)((NSNumber*)%s).intValue",
+	lexer.KeyUInt32:  "(UInt32)((NSNumber*)%s).unsignedIntValue",
+	lexer.KeyInt64:   "(Int64)((NSNumber*)%s).longLongValue",
+	lexer.KeyUInt64:  "(UInt64)((NSNumber*)%s).unsignedLongLongValue",
+	lexer.KeyFloat32: "(Float32)((NSNumber*)%s).floatValue",
+	lexer.KeyFloat64: "(Float64)((NSNumber*)%s).doubleValue",
+	lexer.KeyBool:    "(BOOL)((NSNumber*)%s).boolValue",
+	lexer.KeyString:  "(NSString*)%s",
+}
+
+var type2id = map[lexer.TokenType]string{
+	lexer.KeySByte:   "[[NSNumber alloc]initWithChat :%s]",
+	lexer.KeyByte:    "[[NSNumber alloc] initWithUnsignedChar:%s]",
+	lexer.KeyInt16:   "[[NSNumber alloc] initWithShort:%s]",
+	lexer.KeyUInt16:  "[[NSNumber alloc] initWithUnsignedShort:%s]",
+	lexer.KeyInt32:   "[[NSNumber alloc] initWithInt:%s]",
+	lexer.KeyUInt32:  "[[NSNumber alloc] initWithUnsignedInt:%s]",
+	lexer.KeyInt64:   "[[NSNumber alloc] initWithLongLong:%s]",
+	lexer.KeyUInt64:  "[[NSNumber alloc] initWithUnsignedLongLong:%s]",
+	lexer.KeyFloat32: "[[NSNumber alloc] initWithFloat:%s]",
+	lexer.KeyFloat64: "[[NSNumber alloc] initWithDouble:%s]",
+	lexer.KeyBool:    "[[NSNumber alloc] initWithBool:%s]",
+	lexer.KeyString:  "(id)%s",
+}
+
 var imports = map[string]string{
 	"GSWriter":     "#import <com/gsrpc/stream.h>",
 	"GSReader":     "#import <com/gsrpc/stream.h>",
@@ -491,7 +521,7 @@ func (codegen *_CodeGen) marshal(varname string, typeDecl ast.Type, indent int) 
 
 			writeindent(&stream, indent+1)
 
-			stream.WriteString(fmt.Sprintf("%s vv%d = (%s)v%d;\n", codegen.typeName(seq.Component), indent, codegen.typeName(seq.Component), indent))
+			stream.WriteString(fmt.Sprintf("%s vv%d = %s;\n", codegen.typeName(seq.Component), indent, codegen.toComponentType(fmt.Sprintf("v%d", indent), seq.Component)))
 
 			stream.WriteString(codegen.marshal(fmt.Sprintf("vv%d", indent), seq.Component, indent+1))
 
@@ -505,7 +535,7 @@ func (codegen *_CodeGen) marshal(varname string, typeDecl ast.Type, indent int) 
 
 			writeindent(&stream, indent+1)
 
-			stream.WriteString(fmt.Sprintf("%s vv%d = (%s)v%d;\n", codegen.typeName(seq.Component), indent, codegen.typeName(seq.Component), indent))
+			stream.WriteString(fmt.Sprintf("%s vv%d = %s;\n", codegen.typeName(seq.Component), indent, codegen.toComponentType(fmt.Sprintf("v%d", indent), seq.Component)))
 
 			stream.WriteString(codegen.marshal(fmt.Sprintf("vv%d", indent), seq.Component, indent+1))
 
@@ -519,6 +549,30 @@ func (codegen *_CodeGen) marshal(varname string, typeDecl ast.Type, indent int) 
 	stream.WriteRune('\n')
 
 	return stream.String()
+}
+
+func (codegen *_CodeGen) toComponentType(varname string, typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+		return fmt.Sprintf(id2Type[builtinType.Type], varname)
+	case *ast.TypeRef, *ast.Table, *ast.Enum, *ast.Seq:
+		return fmt.Sprintf("(%s)%s", codegen.typeName(typeDecl), varname)
+	}
+
+	return ""
+}
+
+func (codegen *_CodeGen) fromComponentType(varname string, typeDecl ast.Type) string {
+	switch typeDecl.(type) {
+	case *ast.BuiltinType:
+		builtinType := typeDecl.(*ast.BuiltinType)
+		return fmt.Sprintf(type2id[builtinType.Type], varname)
+	case *ast.TypeRef, *ast.Table, *ast.Enum, *ast.Seq:
+		return varname
+	}
+
+	return ""
 }
 
 func (codegen *_CodeGen) unmarshal(varname string, typeDecl ast.Type, indent int) string {
@@ -582,7 +636,7 @@ func (codegen *_CodeGen) unmarshal(varname string, typeDecl ast.Type, indent int
 
 			writeindent(&stream, indent+1)
 
-			stream.WriteString(fmt.Sprintf("[ %s addObject: v%d];\n\n", varname, indent))
+			stream.WriteString(fmt.Sprintf("[ %s addObject: %s];\n\n", varname, codegen.fromComponentType(fmt.Sprintf("v%d", indent), seq.Component)))
 
 			writeindent(&stream, indent)
 
@@ -610,7 +664,7 @@ func (codegen *_CodeGen) unmarshal(varname string, typeDecl ast.Type, indent int
 
 			writeindent(&stream, indent+1)
 
-			stream.WriteString(fmt.Sprintf("[ %s addObject: v%d];\n\n", varname, indent))
+			stream.WriteString(fmt.Sprintf("[ %s addObject: %s];\n\n", varname, codegen.fromComponentType(fmt.Sprintf("v%d", indent), seq.Component)))
 
 			writeindent(&stream, indent)
 
