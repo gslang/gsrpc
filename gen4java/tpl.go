@@ -136,6 +136,7 @@ public class {{$Struct}} {{if isException .}}extends Exception{{end}}
 {{define "contract"}}{{$Contract := title .Name}}
 
 public interface {{$Contract}} {
+    String NAME = "{{.FullName}}";
 {{range .Methods}}
     {{returnParam .Return}} {{methodName .Name}} {{params .Params}} throws Exception;
 {{end}}
@@ -149,7 +150,7 @@ public interface {{$Contract}} {
 /*
  * {{title .Name}} generate by gs2java,don't modify it manually
  */
-public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
+public final class {{$Contract}}Dispatcher implements com.gsrpc.NamedDispatcher {
 
     private {{$Contract}} service;
 
@@ -157,7 +158,11 @@ public final class {{$Contract}}Dispatcher implements com.gsrpc.Dispatcher {
         this.service = service;
     }
 
-    public com.gsrpc.Response Dispatch(com.gsrpc.Request call) throws Exception
+    public String name() {
+        return "{{.FullName}}";
+    }
+
+    public com.gsrpc.Response dispatch(com.gsrpc.Request call) throws Exception
     {
         switch(call.getMethod()){
         {{range .Methods}}
