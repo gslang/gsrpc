@@ -231,6 +231,11 @@ public final class {{$Contract}}RPC {
         this.serviceID = serviceID;
     }
 
+    public {{$Contract}}RPC(com.gsrpc.Channel net) throws Exception {
+        this.net = net;
+        this.serviceID = com.gsrpc.Register.getInstance().getID({{$Contract}}.NAME);
+    }
+
     {{range .Methods}}{{$Name := title .Name}}
     public {{methodRPC .}} throws Exception {
 
