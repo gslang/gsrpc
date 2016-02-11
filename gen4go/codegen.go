@@ -85,7 +85,6 @@ var imports = map[string]string{
 	"trace.":    "github.com/gsrpc/gorpc/trace",
 	"fmt.":      "fmt",
 	"bytes.":    "bytes",
-	"gsrpc.":    "com/gsrpc",
 	"gserrors.": "github.com/gsdocker/gserrors",
 }
 
